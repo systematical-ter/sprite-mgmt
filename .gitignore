@@ -12,3 +12,7 @@ wheels/
 # local symlinks for testing
 exported_data
 uv.lock
+
+# ignore all images except ex
+*.png
+!ex.png
