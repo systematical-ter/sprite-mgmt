@@ -1,4 +1,4 @@
-from PIL import Image
+from PIL import Image, ImageFile
 import os
 import argparse
 
@@ -41,8 +41,7 @@ def apply_palette_to_img(img_loc: str, pal, tra, newdir:str, overwrite:bool = Fa
 
     check_img_exists_and_png(img_loc)
     img = Image.open(img_loc)
-    img.putpalette(pal)
-    img.info["transparency"] = tra
+    img = _apply_palette(img, pal, tra)
 
     filename = os.path.basename(img_loc)
     outloc = os.path.join(newdir, filename)
@@ -50,6 +49,11 @@ def apply_palette_to_img(img_loc: str, pal, tra, newdir:str, overwrite:bool = Fa
         raise ValueError("File already exists at location %s and overwrite is not set." % outloc)
 
     img.save(os.path.join(newdir, filename))
+
+def _apply_palette(img: ImageFile, pal, tra) :
+    img.putpalette(pal)
+    img.info["transparency"] = tra
+    return img
 
 ### main funcs ###
 
