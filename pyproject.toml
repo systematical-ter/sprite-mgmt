@@ -1,0 +1,9 @@
+[project]
+name = "spriterecolor"
+version = "0.1.0"
+description = "Transfers palettes between indexed png files."
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "pillow>=10.4.0",
+]
