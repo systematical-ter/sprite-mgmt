@@ -6,12 +6,30 @@ import json
 
 
 type bbox = Tuple[int, int, int, int]
+type relbox = Tuple[int, int, int, int]
 
-# testing with 5b for now
 idirectory = "exported_data/char_tm_img/"
-images = ["tm201_0" + str(i) + ".png" for i in range(0,8)]
 mdirectory = "exported_data/char_tm_col/JSONs/"
-metadata = ["tm201_0" + str(i) + ".json" for i in range(0,8)]
+
+mode = "backthrowex"
+
+if mode == "groundex" :
+    # 5b
+    images = ["tm201_0" + str(i) + ".png" for i in range(0,8)]
+    metadata = ["tm201_0" + str(i) + ".json" for i in range(0,8)]
+elif mode == "airex" :
+    # air dp
+    images = ["tm432_" + str(i) + ".png" for i in range(25,29)]
+    metadata = ["tm432_" + str(i) + ".json" for i in range(25,29)]
+elif mode == "airthrowex" :
+    # air throw
+    images = ["tm321_0" + str(i) + ".png" for i in range(2,7)]
+    metadata = ["tm321_0" + str(i) + ".json" for i in range(2,7)]
+elif mode =="backthrowex" :
+    # back throw
+    images = ["tm313_%s.png" % str(i).zfill(2) for i in range(0,14)]
+    metadata = ["tm313_%s.json" % str(i).zfill(2) for i in range(0,14)]
+
 
 palette_img = Image.open("transparency_fixed_poc.png")
 
@@ -50,17 +68,32 @@ class img_metadata() :
 
         self.img = img
 
-    def get_bounding_box(self) -> bbox:
+    def get_bounding_relbox(self) -> relbox:
         x, y, dx, dy = self.img.getbbox()
         if x > self.center_x :
             x = self.center_x
         if y > self.center_y :
             y = self.center_y
 
-        return (x,y,dx,dy)
+        bbox = (x,y,dx,dy)
+        return self.bbox_to_relbox(bbox)
     
-    def crop_to_box(self, bb: bbox) -> None :
+    def crop_to_box(self, bb: relbox) -> None :
+        bb = self.relbox_to_bbox(bb)
         self.img = self.img.crop(bb)
+
+    def draw_box(self, bb:relbox) -> None :
+        bb = self.relbox_to_bbox(bb)
+        i = ImageDraw.Draw(self.img)
+        i.rectangle([(bb[0],bb[1]),(bb[2],bb[3])], fill=None, outline="red")
+
+    def relbox_to_bbox(self, bb:relbox) -> bbox :
+        return (bb[0] + self.center_x, bb[1] + self.center_y, 
+                bb[2] + self.center_x, bb[3] + self.center_y)
+    
+    def bbox_to_relbox(self, bb:bbox) -> relbox :
+        return (bb[0] - self.center_x, bb[1] - self.center_y,
+                bb[2] - self.center_x, bb[3] - self.center_y)
 
     def __str__(self):
         output = "IMAGE OBJECT\n"
@@ -72,7 +105,7 @@ class img_metadata() :
         output += "\tCENTER_Y: %i\n" % self.center_y
         return output
     
-def get_maximal_bb(bbs: List[bbox]) -> bbox:
+def get_maximal_bb(bbs: List[relbox]) -> relbox:
     x,y,dx,dy = 500,500,0,0
     for bb in bbs :
         if bb[0] < x :
@@ -93,8 +126,9 @@ for i,m in enumerate(metadata):
 
 # TODO : crop out empty space at the top?
 # TODO : test on vertical movement.
-maxbb: bbox = get_maximal_bb([o.get_bounding_box() for o in l_m])
+maxbb: relbox = get_maximal_bb([o.get_bounding_relbox() for o in l_m])
 for o in l_m :
+#    o.draw_box(maxbb)
     o.crop_to_box(maxbb)
 l_output = [o.img for o in l_m]
 l_output[0].save("test.gif", format="GIF", save_all=True, append_images=l_output[1:], duration=16, disposal=2, loop=0, transparency=0)
