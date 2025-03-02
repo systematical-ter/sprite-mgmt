@@ -5,8 +5,8 @@ import spriterecolor
 import json
 
 
-type bbox = Tuple[int, int, int, int]
-type relbox = Tuple[int, int, int, int]
+Bbox = Tuple[int, int, int, int]
+Relbox = Tuple[int, int, int, int]
 
 idirectory = "exported_data/char_tm_img/"
 mdirectory = "exported_data/char_tm_col/JSONs/"
@@ -96,7 +96,7 @@ class img_metadata() :
             self.hitboxes.append(Hurtbox(**hitbox))
 
 
-    def get_bounding_relbox(self) -> relbox:
+    def get_bounding_relbox(self) -> Relbox:
         x, y, dx, dy = self.img.getbbox()
         if x > self.center_x :
             x = self.center_x
@@ -106,20 +106,20 @@ class img_metadata() :
         bbox = (x,y,dx,dy)
         return self.bbox_to_relbox(bbox)
     
-    def crop_to_box(self, bb: relbox) -> None :
+    def crop_to_box(self, bb: Relbox) -> None :
         bb = self.relbox_to_bbox(bb)
         self.img = self.img.crop(bb)
 
-    def draw_box(self, bb:relbox) -> None :
+    def draw_box(self, bb:Relbox) -> None :
         bb = self.relbox_to_bbox(bb)
         i = ImageDraw.Draw(self.img)
         i.rectangle([(bb[0],bb[1]),(bb[2],bb[3])], fill=None, outline="red")
 
-    def relbox_to_bbox(self, bb:relbox) -> bbox :
+    def relbox_to_bbox(self, bb:Relbox) -> Bbox :
         return (bb[0] + self.center_x, bb[1] + self.center_y, 
                 bb[2] + self.center_x, bb[3] + self.center_y)
     
-    def bbox_to_relbox(self, bb:bbox) -> relbox :
+    def bbox_to_relbox(self, bb:Bbox) -> Relbox :
         return (bb[0] - self.center_x, bb[1] - self.center_y,
                 bb[2] - self.center_x, bb[3] - self.center_y)
 
@@ -163,7 +163,7 @@ class img_metadata() :
         output += "\tCENTER_Y: %i\n" % self.center_y
         return output
     
-def get_maximal_bb(bbs: List[relbox]) -> relbox:
+def get_maximal_bb(bbs: List[Relbox]) -> Relbox:
     # we want to find the maximal bounding box _relative_ to
     #   the center point. That's because we don't particularly care about
     #   the exact x/ys, we just care about the difference of the x/ys
@@ -191,9 +191,11 @@ for i,m in enumerate(metadata):
 for o in l_m :
     o.draw_hurtboxes()
     o.draw_hitboxes()
-maxbb: relbox = get_maximal_bb([o.get_bounding_relbox() for o in l_m])
+
+maxbb: Relbox = get_maximal_bb([o.get_bounding_relbox() for o in l_m])
+
 for o in l_m :
-#    o.draw_box(maxbb)
     o.crop_to_box(maxbb)
+    
 l_output = [o.img for o in l_m]
 l_output[0].save("test.gif", format="GIF", save_all=True, append_images=l_output[1:], duration=16, disposal=2, loop=0, transparency=0)
