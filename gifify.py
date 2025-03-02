@@ -81,6 +81,10 @@ class Sprite() :
         self.center_x = self.canvas_w + c["X"]
         self.center_y = self.canvas_h + c["Y"]
 
+        # sets the first color to be completely transparent only if
+        #   transparency has not already been defined.
+        if "transparency" not in img.info.keys() :
+            img.info["transparency"] = b'\x00'
         self.img = img.convert("RGBA")
         self.duration = duration
 
@@ -212,7 +216,7 @@ def from_namedurs(nds: List[Tuple[str, int]], hitboxes:bool = False) -> List[Ima
     for i in range(0, len(nds)) :
         sprites.append(Sprite(coldata[i], images[i], durations[i]))
 
-    return compile_sprites(sprites)
+    return compile_sprites(sprites, hitboxes)
 
 def compile_sprites(sprites: List[Sprite], hitboxes: bool = False) -> List[Image.Image] :
     if hitboxes :
@@ -261,4 +265,4 @@ def _make_manual(names: List[str], images: List[Image.Image], durations: Union[L
     
     return compile_sprites(sprites, hitboxes)
 
-#make_gif_from_names(["tm201_0" + str(i) for i in range(0,8)], "test.gif", duration=5, hitboxes=True)
+make_gif_from_names(["tm201_0" + str(i) for i in range(0,8)], "test.gif", duration=5, hitboxes=True)
