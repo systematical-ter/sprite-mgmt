@@ -11,6 +11,8 @@ Relbox = Tuple[int, int, int, int]
 idirectory = "exported_data/char_tm_img/"
 mdirectory = "exported_data/char_tm_col/JSONs/"
 
+draw_hitboxes: bool = False
+
 mode = "theyeet"
 
 if mode == "groundex" :
@@ -35,10 +37,8 @@ elif mode =="theyeet" :
     metadata = ["tm213_%s.json" % str(i).zfill(2) for i in range(0,24)]
 
 
-palette_img = Image.open("transparency_fixed_poc.png")
-
 # get palette + transparency
-p, t = spriterecolor.get_palette_and_transparency("transparency_fixed_poc.png")
+p, t = spriterecolor.get_palette_and_transparency("palette_ref.png")
 
 # load images and then apply our palette
 l_i = [Image.open(os.path.join(idirectory,i)) for i in images]
@@ -188,9 +188,10 @@ for i,m in enumerate(metadata):
 
 # TODO : crop out empty space at the top?
 # TODO : test on vertical movement.
-for o in l_m :
-    o.draw_hurtboxes()
-    o.draw_hitboxes()
+if draw_hitboxes:
+    for o in l_m :
+        o.draw_hurtboxes()
+        o.draw_hitboxes()
 
 maxbb: Relbox = get_maximal_bb([o.get_bounding_relbox() for o in l_m])
 
