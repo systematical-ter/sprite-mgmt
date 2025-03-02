@@ -40,8 +40,28 @@ Tries to keep transparency where possible. I highly recommend ensuring that all 
 ## GIFifier
 
 Given a series of pngs and collision information, generates animated gifs. Can choose whether to draw hitboxes/hurtboxes.
+```
+usage: gifify.py [-h] [--pngdir PNGDIR] [--jsondir JSONDIR] [--duration DURATION] [--hb HB] [--overwrite] output
 
-Not currently customizable from the command line, but if you're really itching to use it take a look at the bottom of `gifify.py` for how to generate the gifs themselves, and `spritemgmt.py` (which will later on be the main tool) to see how to make the output gif use your desired palette.
+Generates a gif from a folder of PNG sprite files and a folder of JSON collision files.
+
+positional arguments:
+  output               Path to save generated .gif to.
+
+options:
+  -h, --help           show this help message and exit
+  --pngdir PNGDIR      Path to directory containing PNG sprite files.
+  --jsondir JSONDIR    Path to directory containing JSON collision files.
+  --duration DURATION  The duration of each frame.
+  --hb                 Whether to render hitboxes.
+  --overwrite          If file already exists at output location, overwrite it.
+  ```
+
+Still requires the `Pillow` package.
+
+Given a directory of sprites and a directory of corresponding collision JSON data, generates a gif using all of the sprites in the folder in the order they are found. Use `--duration` to define how long each sprite is shown on screen.
+
+Better control over creating the gif is available if you reference it from another script or using the eventually-to-be-made `spritemgmt.py` script/ui. I may add the option to set gif frame order with an input file.
 
 <p align="center">
   <img src="test.gif" width="200px" /><img src="test_backthrow.gif" width="200px" /><br>
