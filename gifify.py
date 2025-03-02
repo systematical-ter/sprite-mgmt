@@ -294,7 +294,7 @@ if __name__ == "__main__" :
     parser.add_argument("--pngdir", help="Path to directory containing PNG sprite files.")
     parser.add_argument("--jsondir", help="Path to directory containing JSON collision files.")
     parser.add_argument("--duration", help="The duration of each frame.")
-    parser.add_argument("--hb", help="Whether to render hitboxes.")
+    parser.add_argument("--hb", action="store_true", help="Whether to render hitboxes.")
     parser.add_argument("--overwrite", action="store_true", help="If file already exists at output location, overwrite it.")
     parser.add_argument("output", help="Path to save generated .gif to.")
 
