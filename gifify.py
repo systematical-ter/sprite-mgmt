@@ -11,7 +11,7 @@ type relbox = Tuple[int, int, int, int]
 idirectory = "exported_data/char_tm_img/"
 mdirectory = "exported_data/char_tm_col/JSONs/"
 
-mode = "backthrowex"
+mode = "theyeet"
 
 if mode == "groundex" :
     # 5b
@@ -29,6 +29,10 @@ elif mode =="backthrowex" :
     # back throw
     images = ["tm313_%s.png" % str(i).zfill(2) for i in range(0,14)]
     metadata = ["tm313_%s.json" % str(i).zfill(2) for i in range(0,14)]
+elif mode =="theyeet" :
+    # 6c
+    images = ["tm213_%s.png" % str(i).zfill(2) for i in range(0,24)]
+    metadata = ["tm213_%s.json" % str(i).zfill(2) for i in range(0,24)]
 
 
 palette_img = Image.open("transparency_fixed_poc.png")
@@ -39,6 +43,18 @@ p, t = spriterecolor.get_palette_and_transparency("transparency_fixed_poc.png")
 # load images and then apply our palette
 l_i = [Image.open(os.path.join(idirectory,i)) for i in images]
 l_pi = [spriterecolor._apply_palette(i, p, t).convert("RGBA") for i in l_i]
+
+class Hurtbox() :
+    w: int
+    h: int
+    c_x: int
+    c_y: int
+
+    def __init__(self, X,Y,Width,Height, **kwargs) :
+        self.w = Width
+        self.h = Height
+        self.c_x = X
+        self.c_y = Y
 
 class img_metadata() :
     hitbox_count: int
@@ -51,6 +67,9 @@ class img_metadata() :
     center_y: int
 
     img : ImageFile
+
+    hurtboxes: List[Hurtbox]
+    hitboxes: List[Hurtbox]
 
     def __init__(self, jdict, img) :
         self.hitbox_count = jdict["Header"]["hitboxCount"]
@@ -67,6 +86,15 @@ class img_metadata() :
         self.center_y = self.canvas_h + c["Y"]
 
         self.img = img
+
+        self.hurtboxes = []
+        for hurtbox in jdict["Hurtboxes"] :
+            self.hurtboxes.append(Hurtbox(**hurtbox))
+        
+        self.hitboxes = []
+        for hitbox in jdict["Hitboxes"] :
+            self.hitboxes.append(Hurtbox(**hitbox))
+
 
     def get_bounding_relbox(self) -> relbox:
         x, y, dx, dy = self.img.getbbox()
@@ -95,6 +123,36 @@ class img_metadata() :
         return (bb[0] - self.center_x, bb[1] - self.center_y,
                 bb[2] - self.center_x, bb[3] - self.center_y)
 
+    def draw_hitboxes(self) -> None :
+        TINT_COLOR=(255,0,0)
+        TRANSPARENCY = .3
+        OPACITY= int(255*TRANSPARENCY)
+
+        overlay = Image.new('RGBA', self.img.size, TINT_COLOR+(0,))
+        draw = ImageDraw.Draw(overlay)
+
+        for hb in self.hitboxes :
+            tl_x = self.canvas_w - (self.center_x - hb.c_x)
+            tl_y = self.canvas_h - (self.center_y - hb.c_y)
+            draw.rectangle([(tl_x, tl_y), (tl_x + hb.w, tl_y + hb.h)], fill=TINT_COLOR+(OPACITY,), outline="red")
+        
+        self.img = Image.alpha_composite(self.img, overlay)
+    
+    def draw_hurtboxes(self) -> None :
+        TINT_COLOR=(0,0,255)
+        TRANSPARENCY = .3
+        OPACITY= int(255*TRANSPARENCY)
+
+        overlay = Image.new('RGBA', self.img.size, TINT_COLOR+(0,))
+        draw = ImageDraw.Draw(overlay)
+
+        for hb in self.hurtboxes :
+            tl_x = self.canvas_w - (self.center_x - hb.c_x)
+            tl_y = self.canvas_h - (self.center_y - hb.c_y)
+            draw.rectangle([(tl_x, tl_y), (tl_x + hb.w, tl_y + hb.h)], fill=TINT_COLOR+(OPACITY,), outline="blue")
+        
+        self.img = Image.alpha_composite(self.img, overlay)
+
     def __str__(self):
         output = "IMAGE OBJECT\n"
         output += "\tHITBOXES: %i\n" % self.hitbox_count
@@ -106,6 +164,10 @@ class img_metadata() :
         return output
     
 def get_maximal_bb(bbs: List[relbox]) -> relbox:
+    # we want to find the maximal bounding box _relative_ to
+    #   the center point. That's because we don't particularly care about
+    #   the exact x/ys, we just care about the difference of the x/ys
+    #   from the center point when we're trying to make the sprites align.
     x,y,dx,dy = 500,500,0,0
     for bb in bbs :
         if bb[0] < x :
@@ -126,6 +188,9 @@ for i,m in enumerate(metadata):
 
 # TODO : crop out empty space at the top?
 # TODO : test on vertical movement.
+for o in l_m :
+    o.draw_hurtboxes()
+    o.draw_hitboxes()
 maxbb: relbox = get_maximal_bb([o.get_bounding_relbox() for o in l_m])
 for o in l_m :
 #    o.draw_box(maxbb)
