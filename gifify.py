@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List, Tuple, Union
 from PIL import Image, ImageFile, ImageDraw
 import os
 import spriterecolor
@@ -133,7 +133,7 @@ class Sprite() :
             tl_y = self.canvas_h - (self.center_y - hb.c_y)
             draw.rectangle([(tl_x, tl_y), (tl_x + hb.w, tl_y + hb.h)], fill=TINT_COLOR+(OPACITY,), outline="red")
         
-        #self.img = Image.alpha_composite(self.img, overlay)
+        self.img = Image.alpha_composite(self.img, overlay)
     
     def draw_hurtboxes(self) -> None :
         TINT_COLOR=(0,0,255)
@@ -197,6 +197,7 @@ def from_namedurs(nds: List[Tuple[str, int]], hitboxes:bool = False) -> List[Ima
 
     image_paths = get_png_paths([n for n,_ in nds])
     col_paths = get_col_paths([n for n,_ in nds])
+    durations = [d for _,d in nds]
 
     # guaranteed to be in the same order b/c of the way image_paths,
     #   col_paths were made
@@ -209,9 +210,11 @@ def from_namedurs(nds: List[Tuple[str, int]], hitboxes:bool = False) -> List[Ima
     # create Sprite objects
     sprites:List[Sprite] = []
     for i in range(0, len(nds)) :
-        sprites.append(Sprite(coldata[i], images[i], nds[i][1]))
+        sprites.append(Sprite(coldata[i], images[i], durations[i]))
 
-    # draw (hit|hurt)boxes, if wanted
+    return compile_sprites(sprites)
+
+def compile_sprites(sprites: List[Sprite], hitboxes: bool = False) -> List[Image.Image] :
     if hitboxes :
         for spr in sprites :
             spr.draw_hitboxes()
@@ -241,4 +244,21 @@ def make_gif_from_names(names: List[str], filename: str, duration:int = 3, hitbo
     nds = list(zip(names, [duration]*len(names)))
     make_gif_from_namedurs(nds, filename, hitboxes)
 
-make_gif_from_names(["tm201_0" + str(i) for i in range(0,8)], "test.gif", duration=5, hitboxes=True)
+def _make_manual(names: List[str], images: List[Image.Image], durations: Union[List[int], int], hitboxes: bool = False) -> List[Image.Image]:
+    # check if all lists are of the same length
+    col_paths = get_col_paths(names)
+    if isinstance(durations, int) :
+        durations = [durations] * len(names)
+
+    coldata: List = []
+    for m in col_paths:
+        with open(m) as f:
+            coldata.append(json.load(f))
+    
+    sprites: List[Sprite] = []
+    for i in range(0, len(images)) :
+        sprites.append(Sprite(coldata[i], images[i], durations[i]))
+    
+    return compile_sprites(sprites, hitboxes)
+
+#make_gif_from_names(["tm201_0" + str(i) for i in range(0,8)], "test.gif", duration=5, hitboxes=True)

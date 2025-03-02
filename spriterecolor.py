@@ -1,3 +1,4 @@
+from typing import List
 from PIL import Image, ImageFile
 import os
 import argparse
@@ -10,6 +11,19 @@ def check_img_exists_and_png(loc) :
     if not os.path.normpath(loc).endswith("png") :
         raise ValueError("Provided file %s is not a .png." % loc)
     return True
+
+def _spec_ret_IMG(files, pal, tra) -> List[Image.Image] :
+    output: List[Image.Image] = []
+    for f in files :
+        output.append(_apply_ret_IMG(f, pal, tra))
+    return output
+
+def _dir_ret_IMG(directory, pal, tra) -> List[Image.Image]:
+    output: List[Image.Image] = []
+    files = [f for f in os.listdir(directory) if f.endswith('png')]
+    for f in files :
+        output.append(_apply_ret_IMG(os.path.join(directory, f), pal, tra))
+    return output
 
 def run_over_dir(directory, pal, tra, output, overwrite:bool = False) :
     if not os.path.exists(directory) :
@@ -33,6 +47,11 @@ def get_palette_and_transparency(ref_img_loc: str) :
 
     return pal, tra
 
+def _apply_ret_IMG(img_loc: str, pal, tra) -> Image.Image :
+    img = Image.open(img_loc)
+    img = _apply_palette(img, pal, tra)
+    return img
+
 def apply_palette_to_img(img_loc: str, pal, tra, newdir:str, overwrite:bool = False) :
     if not os.path.exists(newdir) :
         os.mkdir(newdir)
@@ -40,8 +59,7 @@ def apply_palette_to_img(img_loc: str, pal, tra, newdir:str, overwrite:bool = Fa
         os.mkdir(newdir)
 
     check_img_exists_and_png(img_loc)
-    img = Image.open(img_loc)
-    img = _apply_palette(img, pal, tra)
+    img = _apply_ret_IMG(img_loc, pal, tra)
 
     filename = os.path.basename(img_loc)
     outloc = os.path.join(newdir, filename)
@@ -57,7 +75,7 @@ def _apply_palette(img: ImageFile, pal, tra) :
 
 ### main funcs ###
 
-def main(file, directory, reference, output, overwrite) :
+def main(file, files, directory, reference, output, overwrite) :
     check_img_exists_and_png(reference)
     pal, tra = get_palette_and_transparency(reference)
 
