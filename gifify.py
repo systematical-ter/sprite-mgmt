@@ -254,8 +254,12 @@ def make_gif_from_names(names: List[str], filename: str, duration:int = 3, hitbo
     nds = list(zip(names, [duration]*len(names)))
     make_gif_from_namedurs(nds, filename, hitboxes)
 
-def make_gif_from_sprlocs_collocs(sprlocs: List[str], collocs: List[str], durs: List[int], filename: str, hitboxes: bool = False) :
+def make_gif_from_sprlocs_collocs(sprlocs: List[str], collocs: List[str], durs: List[int], filename: str, hitboxes: bool = False, overwrite: bool = False) :
     imgs: List[Image.Image] = from_png_col_durs(sprlocs, collocs, durs, hitboxes)
+    if not overwrite :
+        if os.path.exists(filename) :
+            raise ValueError("A file already exists at %s and overwrite is set to False." % filename)
+        
     imgs[0].save(filename, format="GIF", save_all=True, append_images=imgs[1:], duration=16, disposal=2, loop=0, transparency=0)
 
 def _make_manual(names: List[str], images: List[Image.Image], durations: Union[List[int], int], hitboxes: bool = False) -> List[Image.Image]:
@@ -283,7 +287,7 @@ def main(pngdir, jsondir, duration, hb, overwrite, output) :
     pngs = list(map(lambda x: os.path.join(pngdir, x), pngs))
     jsons = list(map(lambda x: os.path.join(jsondir, x), jsons))
     duration = [int(duration)] * len(pngs)
-    make_gif_from_sprlocs_collocs(pngs, jsons, duration, output, hb)
+    make_gif_from_sprlocs_collocs(pngs, jsons, duration, output, hb, overwrite)
 
 if __name__ == "__main__" :
     parser = argparse.ArgumentParser(description="Generates a gif from a folder of PNG sprite files and a folder of JSON collision files.")
