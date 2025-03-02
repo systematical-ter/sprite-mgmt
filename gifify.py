@@ -1,9 +1,11 @@
+import argparse
 from functools import reduce
 from typing import List, Tuple, Union
-from PIL import Image, ImageFile, ImageDraw
+from PIL import Image, ImageDraw
 import os
-import spriterecolor
 import json
+
+import filetools
 
 
 Bbox = Tuple[int, int, int, int]
@@ -274,18 +276,22 @@ def from_namedurs(nds: List[Tuple[str, int]], hitboxes:bool = False) -> List[Ima
 
     # guaranteed to be in the same order b/c of the way image_paths,
     #   col_paths were made
-    images: List[Image.Image] = [Image.open(path) for path in image_paths]  # image objects
-    coldata: List = []                                                      # JSON collision data
-    for m in col_paths :
-        with open(m) as f :
+    return from_png_col_durs(image_paths, col_paths, durations, hitboxes)
+
+def from_png_col_durs(pngs: List[str], cols: List[str], durs: List[int], hitboxes: bool = False) -> List[Image.Image] :
+    # confirmed to be in the same order before getting here
+    images: List[Image.Image] = [Image.open(path) for path in pngs]
+    coldata: List = []
+    for c in cols :
+        with open(c) as f:
             coldata.append(json.load(f))
 
     # create Sprite objects
     sprites:List[Sprite] = []
-    for i in range(0, len(nds)) :
-        if durations[i] > 30 :
-            durations[i] = 30
-        sprites.append(Sprite(coldata[i], images[i], durations[i]))
+    for i in range(0, len(images)) :
+        if durs[i] > 30 :
+            durs[i] = 30
+        sprites.append(Sprite(coldata[i], images[i], durs[i]))
 
     return compile_sprites(sprites, hitboxes)
 
@@ -321,6 +327,14 @@ def make_gif_from_names(names: List[str], filename: str, duration:int = 3, hitbo
     nds = list(zip(names, [duration]*len(names)))
     make_gif_from_namedurs(nds, filename, hitboxes)
 
+def make_gif_from_sprlocs_collocs(sprlocs: List[str], collocs: List[str], durs: List[int], filename: str, hitboxes: bool = False, overwrite: bool = False) :
+    imgs: List[Image.Image] = from_png_col_durs(sprlocs, collocs, durs, hitboxes)
+    if not overwrite :
+        if os.path.exists(filename) :
+            raise ValueError("A file already exists at %s and overwrite is set to False." % filename)
+        
+    imgs[0].save(filename, format="GIF", save_all=True, append_images=imgs[1:], duration=16, disposal=2, loop=0, transparency=0)
+
 def _make_manual(names: List[str], images: List[Image.Image], durations: Union[List[int], int], hitboxes: bool = False) -> List[Image.Image]:
     # check if all lists are of the same length
     col_paths = get_col_paths(names)
@@ -340,4 +354,24 @@ def _make_manual(names: List[str], images: List[Image.Image], durations: Union[L
     
     return compile_sprites(sprites, hitboxes)
 
-make_gif_from_names(["tm201_0" + str(i) for i in range(0,8)], "test.gif", duration=5, hitboxes=True)
+def main(pngdir, jsondir, duration, hb, overwrite, output) :
+    pngs = filetools.find_sprites(pngdir)
+    jsons = filetools.find_collision(jsondir)
+
+    pngs, jsons = filetools.ensure_order(pngs, jsons)
+    pngs = list(map(lambda x: os.path.join(pngdir, x), pngs))
+    jsons = list(map(lambda x: os.path.join(jsondir, x), jsons))
+    duration = [int(duration)] * len(pngs)
+    make_gif_from_sprlocs_collocs(pngs, jsons, duration, output, hb, overwrite)
+
+if __name__ == "__main__" :
+    parser = argparse.ArgumentParser(description="Generates a gif from a folder of PNG sprite files and a folder of JSON collision files.")
+    parser.add_argument("--pngdir", help="Path to directory containing PNG sprite files.")
+    parser.add_argument("--jsondir", help="Path to directory containing JSON collision files.")
+    parser.add_argument("--duration", help="The duration of each frame.")
+    parser.add_argument("--hb", action="store_true", help="Whether to render hitboxes.")
+    parser.add_argument("--overwrite", action="store_true", help="If file already exists at output location, overwrite it.")
+    parser.add_argument("output", help="Path to save generated .gif to.")
+
+    main(**vars(parser.parse_args()))
+    
