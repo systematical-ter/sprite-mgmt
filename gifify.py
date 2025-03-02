@@ -1,3 +1,4 @@
+from functools import reduce
 from typing import List, Tuple, Union
 from PIL import Image, ImageFile, ImageDraw
 import os
@@ -85,8 +86,25 @@ class Sprite() :
         #   transparency has not already been defined.
         if "transparency" not in img.info.keys() :
             img.info["transparency"] = b'\x00'
+
+        # check if the background is weird -- 
+        #    e.g. terumi 030_06 has a weird error where
+        #    a huge chunk of it is orange
+        h, w = img.size
+        br_color = img.getpixel((w-1, h-1))
+        if br_color != 0 :
+            img = self.remove_strange_behavior(img)
+
+        # I'm not dealing with mouths. Crop them out so they don't
+        #   mess with position normalization.
+        if len(jdict["Chunks"]) > 1 :
+            chunk_left_x = jdict["Chunks"][1]["SrcX"]
+            img = self.remove_secondary_boxes(img, chunk_left_x)
+        
         self.img = img.convert("RGBA")
-        self.duration = duration
+        #self.draw_center()
+        #self.draw_box(self.bbox_to_relbox(img.getbbox()))
+        self.duration = int(duration)
 
         self.hurtboxes = []
         for hurtbox in jdict["Hurtboxes"] :
@@ -96,7 +114,53 @@ class Sprite() :
         for hitbox in jdict["Hitboxes"] :
             self.hitboxes.append(Hurtbox(**hitbox))
 
+    def remove_secondary_boxes(self, img: Image.Image, chunk_x: int) -> Image.Image :
+        img2 = Image.new("PA", img.size, 0)
+        img2.putpalette(img.palette)
+        _,h = img.size
 
+        img = img.crop((0,0,chunk_x, h))
+        img2.paste(img, (0,0))
+        return img2
+    
+    def remove_strange_behavior(self, img: Image.Image) -> Image.Image:
+        """Fix strange miscolored backgrounds
+
+        Some images have strange behavior where the image is filled
+        with some extra color. (Example: Terumi 030 frame 06.) This
+        resolves that by finding the area of the image that is
+        correctly transparent, cropping the image to only that region,
+        and then re-sizing the image back to the original size with
+        a transparent background.
+
+        :param img: Image to fix
+        :type img: Image.Image
+        :return: Image with a hopefully fixed background.
+        :rtype: Image.Image
+        """
+        # create temporary image
+        img2 = Image.new("PA", img.size, 0)
+        img2.putpalette(img.palette)
+
+        # find the transparent pixel box
+        found_pixels = [i for i, pixel in enumerate(img.getdata()) if pixel == 0]
+        w,_ = img.size
+        found_pixels_coords = [divmod(index, w) for index in found_pixels]
+        
+        # apparently x[0] ix y and x[1] is x for how I did it above.
+        y_only = list(map(lambda x: x[0], found_pixels_coords))
+        x_only = list(map(lambda x: x[1], found_pixels_coords))
+        min_x = reduce(lambda x,y : x if x < y else y, x_only)
+        max_x = reduce(lambda x,y: x if x > y else y, x_only)
+        min_y = reduce(lambda x,y : x if x < y else y, y_only)
+        max_y = reduce(lambda x,y: x if x > y else y, y_only)
+
+        # crop it and re-extend it
+        img = img.crop((min_x, min_y, max_x, max_y))
+        img2.paste(img, (min_x, min_y))
+        
+        return img2
+    
     def get_bounding_relbox(self) -> Relbox:
         x, y, dx, dy = self.img.getbbox()
         if x > self.center_x :
@@ -110,6 +174,11 @@ class Sprite() :
     def crop_to_box(self, bb: Relbox) -> None :
         bb = self.relbox_to_bbox(bb)
         self.img = self.img.crop(bb)
+
+    def draw_center(self) -> None :
+        i = ImageDraw.Draw(self.img)
+        x,y = self.center_x, self.center_y
+        i.rectangle([(x-5, y-5),(x+5,y+5)], fill="red")
 
     def draw_box(self, bb:Relbox) -> None :
         bb = self.relbox_to_bbox(bb)
@@ -169,7 +238,7 @@ def get_maximal_bb(bbs: List[Relbox]) -> Relbox:
     #   the center point. That's because we don't particularly care about
     #   the exact x/ys, we just care about the difference of the x/ys
     #   from the center point when we're trying to make the sprites align.
-    x,y,dx,dy = 500,500,0,0
+    x,y,dx,dy = 700,700,0,0
     for bb in bbs :
         if bb[0] < x :
             x = bb[0]
@@ -201,7 +270,7 @@ def from_namedurs(nds: List[Tuple[str, int]], hitboxes:bool = False) -> List[Ima
 
     image_paths = get_png_paths([n for n,_ in nds])
     col_paths = get_col_paths([n for n,_ in nds])
-    durations = [d for _,d in nds]
+    durations = [int(d) for _,d in nds]
 
     # guaranteed to be in the same order b/c of the way image_paths,
     #   col_paths were made
@@ -214,6 +283,8 @@ def from_namedurs(nds: List[Tuple[str, int]], hitboxes:bool = False) -> List[Ima
     # create Sprite objects
     sprites:List[Sprite] = []
     for i in range(0, len(nds)) :
+        if durations[i] > 30 :
+            durations[i] = 30
         sprites.append(Sprite(coldata[i], images[i], durations[i]))
 
     return compile_sprites(sprites, hitboxes)
@@ -233,7 +304,7 @@ def compile_sprites(sprites: List[Sprite], hitboxes: bool = False) -> List[Image
 
     # iterate over sprites; add dur multiples of them in the list to imitate # of frames they are present
     output: List[Image.Image] = []
-    for spr in sprites:
+    for i,spr in enumerate(sprites):
         img_l = [spr.img]
         img_l = img_l * spr.duration
         output.extend(img_l)
@@ -241,8 +312,10 @@ def compile_sprites(sprites: List[Sprite], hitboxes: bool = False) -> List[Image
     return output
 
 def make_gif_from_namedurs(nds: List[Tuple[str, int]], filename: str, hitboxes: bool = False) :
+    giffps = 16
+    #giffps = giffps * 2
     imgs: List[Image.Image] = from_namedurs(nds, hitboxes)
-    imgs[0].save(filename, format="GIF", save_all=True, append_images=imgs[1:], duration=16, disposal=2, loop=0, transparency=0)
+    imgs[0].save(filename, format="GIF", save_all=True, append_images=imgs[1:], duration=giffps, disposal=2, loop=0, transparency=0)
 
 def make_gif_from_names(names: List[str], filename: str, duration:int = 3, hitboxes: bool = False) :
     nds = list(zip(names, [duration]*len(names)))
@@ -261,6 +334,8 @@ def _make_manual(names: List[str], images: List[Image.Image], durations: Union[L
     
     sprites: List[Sprite] = []
     for i in range(0, len(images)) :
+        if durations[i] > 30 :
+            durations[i] = 30
         sprites.append(Sprite(coldata[i], images[i], durations[i]))
     
     return compile_sprites(sprites, hitboxes)
