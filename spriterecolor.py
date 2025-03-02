@@ -75,7 +75,7 @@ def _apply_palette(img: ImageFile, pal, tra) :
 
 ### main funcs ###
 
-def main(file, files, directory, reference, output, overwrite) :
+def main(file, directory, reference, output, overwrite) :
     check_img_exists_and_png(reference)
     pal, tra = get_palette_and_transparency(reference)
 
