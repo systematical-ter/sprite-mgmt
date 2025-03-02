@@ -1,7 +1,6 @@
 from typing import List, Tuple, Union
-from PIL import Image, ImageFile, ImageDraw
+from PIL import Image, ImageDraw
 import os
-import spriterecolor
 import json
 
 
