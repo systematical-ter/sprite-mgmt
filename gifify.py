@@ -83,6 +83,8 @@ class Sprite() :
         #   so we get the center by adding them.
         self.center_x = self.canvas_w + c["X"]
         self.center_y = self.canvas_h + c["Y"]
+        self.center_x = 0
+        self.center_y = 0
 
         # sets the first color to be completely transparent only if
         #   transparency has not already been defined.
@@ -173,8 +175,14 @@ class Sprite() :
         bbox = (x,y,dx,dy)
         return self.bbox_to_relbox(bbox)
     
+    def get_bounding_bbox(self) -> Bbox :
+        x, y, dx, dy = self.img.getbbox()
+
+        bbox = (x,y,dx,dy)
+        return bbox
+    
     def crop_to_box(self, bb: Relbox) -> None :
-        bb = self.relbox_to_bbox(bb)
+        #bb = self.relbox_to_bbox(bb)
         self.img = self.img.crop(bb)
 
     def draw_center(self) -> None :
@@ -183,7 +191,7 @@ class Sprite() :
         i.rectangle([(x-5, y-5),(x+5,y+5)], fill="red")
 
     def draw_box(self, bb:Relbox) -> None :
-        bb = self.relbox_to_bbox(bb)
+        #bb = self.relbox_to_bbox(bb)
         i = ImageDraw.Draw(self.img)
         i.rectangle([(bb[0],bb[1]),(bb[2],bb[3])], fill=None, outline="red")
 
@@ -302,7 +310,7 @@ def compile_sprites(sprites: List[Sprite], hitboxes: bool = False) -> List[Image
             spr.draw_hurtboxes()
 
     # get the maximal bounding box, for centering purposes
-    maxbb: Relbox = get_maximal_bb([spr.get_bounding_relbox() for spr in sprites])
+    maxbb: Relbox = get_maximal_bb([spr.get_bounding_bbox() for spr in sprites])
 
     # crop according to maximal bounding box
     for spr in sprites :
@@ -353,6 +361,12 @@ def _make_manual(names: List[str], images: List[Image.Image], durations: Union[L
         sprites.append(Sprite(coldata[i], images[i], durations[i]))
     
     return compile_sprites(sprites, hitboxes)
+
+def _from_given_paths(pngpaths, jsonpaths, duration, hb, overwrite, output) :
+    pngs = pngpaths
+    jsons = jsonpaths
+    duration = [int(duration)] * len(pngs)
+    make_gif_from_sprlocs_collocs(pngs, jsons, duration, output, hb, overwrite)
 
 def main(pngdir, jsondir, duration, hb, overwrite, output) :
     pngs = filetools.find_sprites(pngdir)
