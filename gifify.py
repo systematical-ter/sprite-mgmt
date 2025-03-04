@@ -1,4 +1,5 @@
 import argparse
+from functools import reduce
 from typing import List, Tuple, Union
 from PIL import Image, ImageDraw
 import os
@@ -60,8 +61,8 @@ class Sprite() :
     canvas_w: int
     canvas_h: int
     
-    center_x: int
-    center_y: int
+    offset_x: int
+    offset_y: int
 
     img : Image.Image
     duration: int
@@ -78,17 +79,36 @@ class Sprite() :
         self.canvas_w = c["Width"]
         self.canvas_h = c["Height"]
 
-        # X,Y of the centerpoint dot are stored in relation to canvas width and height (for some reason)
-        #   so we get the center by adding them.
-        self.center_x = self.canvas_w + c["X"]
-        self.center_y = self.canvas_h + c["Y"]
+        # hitboxes are based on the character sprite offset
+        #   which is stored in negative for some reason.
+        self.offset_x = -c["X"]
+        self.offset_y = -c["Y"]
 
         # sets the first color to be completely transparent only if
         #   transparency has not already been defined.
         if "transparency" not in img.info.keys() :
             img.info["transparency"] = b'\x00'
+
+        # check if the background is weird -- 
+        #    e.g. terumi 030_06 has a weird error where
+        #    a huge chunk of it is orange
+        h, w = img.size
+        br_color = img.getpixel((w-1, h-1))
+        if br_color != 0 :
+            img = self.remove_strange_behavior(img)
+
+
+        # I'm not dealing with mouths. Crop them out so they don't
+        #   mess with position normalization.
+        if len(jdict["Chunks"]) > 1 :
+            chunk_left_x = jdict["Chunks"][1]["SrcX"]
+            img = self.remove_secondary_boxes(img, chunk_left_x)
+        
+
         self.img = img.convert("RGBA")
-        self.duration = duration
+        self.tl_x, self.tl_y,_,_ = self.img.getbbox()
+        #self.draw_center()
+        self.duration = int(duration)
 
         self.hurtboxes = []
         for hurtbox in jdict["Hurtboxes"] :
@@ -98,33 +118,78 @@ class Sprite() :
         for hitbox in jdict["Hitboxes"] :
             self.hitboxes.append(Hurtbox(**hitbox))
 
+    def remove_secondary_boxes(self, img: Image.Image, chunk_x: int) -> Image.Image :
+        img2 = Image.new("PA", img.size, 0)
+        img2.putpalette(img.palette)
+        _,h = img.size
 
-    def get_bounding_relbox(self) -> Relbox:
+        img = img.crop((0,0,chunk_x, h))
+        img2.paste(img, (0,0))
+        return img2
+    
+    def remove_strange_behavior(self, img: Image.Image) -> Image.Image:
+        """Fix strange miscolored backgrounds
+
+        Some images have strange behavior where the image is filled
+        with some extra color. (Example: Terumi 030 frame 06.) This
+        resolves that by finding the area of the image that is
+        correctly transparent, cropping the image to only that region,
+        and then re-sizing the image back to the original size with
+        a transparent background.
+
+        :param img: Image to fix
+        :type img: Image.Image
+        :return: Image with a hopefully fixed background.
+        :rtype: Image.Image
+        """
+        # create temporary image
+        img2 = Image.new("PA", img.size, 0)
+        img2.putpalette(img.palette)
+
+        # find the transparent pixel box
+        found_pixels = [i for i, pixel in enumerate(img.getdata()) if pixel == 0]
+        w,_ = img.size
+        found_pixels_coords = [divmod(index, w) for index in found_pixels]
+        
+        # apparently x[0] ix y and x[1] is x for how I did it above.
+        y_only = list(map(lambda x: x[0], found_pixels_coords))
+        x_only = list(map(lambda x: x[1], found_pixels_coords))
+        min_x = reduce(lambda x,y : x if x < y else y, x_only)
+        max_x = reduce(lambda x,y: x if x > y else y, x_only)
+        min_y = reduce(lambda x,y : x if x < y else y, y_only)
+        max_y = reduce(lambda x,y: x if x > y else y, y_only)
+
+        # crop it and re-extend it
+        img = img.crop((min_x, min_y, max_x, max_y))
+        img2.paste(img, (min_x, min_y))
+        
+        return img2
+    
+    def get_bounding_bbox(self) -> Bbox :
         x, y, dx, dy = self.img.getbbox()
-        if x > self.center_x :
-            x = self.center_x
-        if y > self.center_y :
-            y = self.center_y
 
         bbox = (x,y,dx,dy)
-        return self.bbox_to_relbox(bbox)
+        return bbox
     
-    def crop_to_box(self, bb: Relbox) -> None :
-        bb = self.relbox_to_bbox(bb)
+    def crop_to_box(self, bb: Bbox) -> None :
         self.img = self.img.crop(bb)
 
-    def draw_box(self, bb:Relbox) -> None :
-        bb = self.relbox_to_bbox(bb)
+    def draw_center(self) -> None :
+        i = ImageDraw.Draw(self.img)
+        x,y = self.center_x, self.center_y
+        i.rectangle([(x-5, y-5),(x+5,y+5)], fill="red")
+
+    def draw_box(self, bb:Bbox) -> None :
         i = ImageDraw.Draw(self.img)
         i.rectangle([(bb[0],bb[1]),(bb[2],bb[3])], fill=None, outline="red")
 
     def relbox_to_bbox(self, bb:Relbox) -> Bbox :
-        return (bb[0] + self.center_x, bb[1] + self.center_y, 
-                bb[2] + self.center_x, bb[3] + self.center_y)
+        return (bb[0] - self.offset_x, bb[1] - self.offset_y, 
+                bb[2] - self.offset_x, bb[3] - self.offset_y)
     
     def bbox_to_relbox(self, bb:Bbox) -> Relbox :
-        return (bb[0] - self.center_x, bb[1] - self.center_y,
-                bb[2] - self.center_x, bb[3] - self.center_y)
+        return (bb[0] + self.offset_x, bb[1] + self.offset_y,
+                bb[2] + self.offset_x, bb[3] + self.offset_y)
 
     def draw_hitboxes(self) -> None :
         TINT_COLOR=(255,0,0)
@@ -135,8 +200,8 @@ class Sprite() :
         draw = ImageDraw.Draw(overlay)
 
         for hb in self.hitboxes :
-            tl_x = self.canvas_w - (self.center_x - hb.c_x)
-            tl_y = self.canvas_h - (self.center_y - hb.c_y)
+            tl_x = self.offset_x + hb.c_x
+            tl_y = self.offset_y + hb.c_y
             draw.rectangle([(tl_x, tl_y), (tl_x + hb.w, tl_y + hb.h)], fill=TINT_COLOR+(OPACITY,), outline="red")
         
         self.img = Image.alpha_composite(self.img, overlay)
@@ -150,8 +215,8 @@ class Sprite() :
         draw = ImageDraw.Draw(overlay)
 
         for hb in self.hurtboxes :
-            tl_x = self.canvas_w - (self.center_x - hb.c_x)
-            tl_y = self.canvas_h - (self.center_y - hb.c_y)
+            tl_x = self.offset_x + hb.c_x
+            tl_y = self.offset_y + hb.c_y
             draw.rectangle([(tl_x, tl_y), (tl_x + hb.w, tl_y + hb.h)], fill=TINT_COLOR+(OPACITY,), outline="blue")
         
         self.img = Image.alpha_composite(self.img, overlay)
@@ -162,16 +227,12 @@ class Sprite() :
         output += "\tHURTBOXES: %i\n" % self.hurtbox_count
         output += "\tWIDTH: %i\n" % self.canvas_w
         output += "\tHEIGHT: %i\n" % self.canvas_h
-        output += "\tCENTER_X: %i\n" % self.center_x
-        output += "\tCENTER_Y: %i\n" % self.center_y
+        output += "\tOFFSET_X: %i\n" % self.offset_x
+        output += "\tOFFSET_Y: %i\n" % self.offset_y
         return output
     
-def get_maximal_bb(bbs: List[Relbox]) -> Relbox:
-    # we want to find the maximal bounding box _relative_ to
-    #   the center point. That's because we don't particularly care about
-    #   the exact x/ys, we just care about the difference of the x/ys
-    #   from the center point when we're trying to make the sprites align.
-    x,y,dx,dy = 500,500,0,0
+def get_maximal_bb(bbs: List[Bbox]) -> Bbox:
+    x,y,dx,dy = 700,700,0,0
     for bb in bbs :
         if bb[0] < x :
             x = bb[0]
@@ -203,7 +264,7 @@ def from_namedurs(nds: List[Tuple[str, int]], hitboxes:bool = False) -> List[Ima
 
     image_paths = get_png_paths([n for n,_ in nds])
     col_paths = get_col_paths([n for n,_ in nds])
-    durations = [d for _,d in nds]
+    durations = [int(d) for _,d in nds]
 
     # guaranteed to be in the same order b/c of the way image_paths,
     #   col_paths were made
@@ -220,6 +281,8 @@ def from_png_col_durs(pngs: List[str], cols: List[str], durs: List[int], hitboxe
     # create Sprite objects
     sprites:List[Sprite] = []
     for i in range(0, len(images)) :
+        if durs[i] > 30 :
+            durs[i] = 30
         sprites.append(Sprite(coldata[i], images[i], durs[i]))
 
     return compile_sprites(sprites, hitboxes)
@@ -231,7 +294,7 @@ def compile_sprites(sprites: List[Sprite], hitboxes: bool = False) -> List[Image
             spr.draw_hurtboxes()
 
     # get the maximal bounding box, for centering purposes
-    maxbb: Relbox = get_maximal_bb([spr.get_bounding_relbox() for spr in sprites])
+    maxbb: Relbox = get_maximal_bb([spr.get_bounding_bbox() for spr in sprites])
 
     # crop according to maximal bounding box
     for spr in sprites :
@@ -239,7 +302,7 @@ def compile_sprites(sprites: List[Sprite], hitboxes: bool = False) -> List[Image
 
     # iterate over sprites; add dur multiples of them in the list to imitate # of frames they are present
     output: List[Image.Image] = []
-    for spr in sprites:
+    for i,spr in enumerate(sprites):
         img_l = [spr.img]
         img_l = img_l * spr.duration
         output.extend(img_l)
@@ -247,8 +310,10 @@ def compile_sprites(sprites: List[Sprite], hitboxes: bool = False) -> List[Image
     return output
 
 def make_gif_from_namedurs(nds: List[Tuple[str, int]], filename: str, hitboxes: bool = False) :
+    giffps = 16
+    #giffps = giffps * 2
     imgs: List[Image.Image] = from_namedurs(nds, hitboxes)
-    imgs[0].save(filename, format="GIF", save_all=True, append_images=imgs[1:], duration=16, disposal=2, loop=0, transparency=0)
+    imgs[0].save(filename, format="GIF", save_all=True, append_images=imgs[1:], duration=giffps, disposal=2, loop=0, transparency=0)
 
 def make_gif_from_names(names: List[str], filename: str, duration:int = 3, hitboxes: bool = False) :
     nds = list(zip(names, [duration]*len(names)))
@@ -275,9 +340,17 @@ def _make_manual(names: List[str], images: List[Image.Image], durations: Union[L
     
     sprites: List[Sprite] = []
     for i in range(0, len(images)) :
+        if durations[i] > 30 :
+            durations[i] = 30
         sprites.append(Sprite(coldata[i], images[i], durations[i]))
     
     return compile_sprites(sprites, hitboxes)
+
+def _from_given_paths(pngpaths, jsonpaths, duration, hb, overwrite, output) :
+    pngs = pngpaths
+    jsons = jsonpaths
+    duration = [int(duration)] * len(pngs)
+    make_gif_from_sprlocs_collocs(pngs, jsons, duration, output, hb, overwrite)
 
 def main(pngdir, jsondir, duration, hb, overwrite, output) :
     pngs = filetools.find_sprites(pngdir)
