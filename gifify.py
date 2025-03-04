@@ -79,12 +79,10 @@ class Sprite() :
         self.canvas_w = c["Width"]
         self.canvas_h = c["Height"]
 
-        # X,Y of the centerpoint dot are stored in relation to canvas width and height (for some reason)
-        #   so we get the center by adding them.
-        self.center_x = self.canvas_w + c["X"]
-        self.center_y = self.canvas_h + c["Y"]
-        self.center_x = 0
-        self.center_y = 0
+        # hitboxes are based on the character sprite offset
+        #   which is stored in negative for some reason.
+        self.offset_x = -c["X"]
+        self.offset_y = -c["Y"]
 
         # sets the first color to be completely transparent only if
         #   transparency has not already been defined.
@@ -106,9 +104,10 @@ class Sprite() :
             chunk_left_x = jdict["Chunks"][1]["SrcX"]
             img = self.remove_secondary_boxes(img, chunk_left_x)
         
+
         self.img = img.convert("RGBA")
+        self.tl_x, self.tl_y,_,_ = self.img.getbbox()
         #self.draw_center()
-        #self.draw_box(self.bbox_to_relbox(img.getbbox()))
         self.duration = int(duration)
 
         self.hurtboxes = []
@@ -166,24 +165,13 @@ class Sprite() :
         
         return img2
     
-    def get_bounding_relbox(self) -> Relbox:
-        x, y, dx, dy = self.img.getbbox()
-        if x > self.center_x :
-            x = self.center_x
-        if y > self.center_y :
-            y = self.center_y
-
-        bbox = (x,y,dx,dy)
-        return self.bbox_to_relbox(bbox)
-    
     def get_bounding_bbox(self) -> Bbox :
         x, y, dx, dy = self.img.getbbox()
 
         bbox = (x,y,dx,dy)
         return bbox
     
-    def crop_to_box(self, bb: Relbox) -> None :
-        #bb = self.relbox_to_bbox(bb)
+    def crop_to_box(self, bb: Bbox) -> None :
         self.img = self.img.crop(bb)
 
     def draw_center(self) -> None :
@@ -191,18 +179,17 @@ class Sprite() :
         x,y = self.center_x, self.center_y
         i.rectangle([(x-5, y-5),(x+5,y+5)], fill="red")
 
-    def draw_box(self, bb:Relbox) -> None :
-        #bb = self.relbox_to_bbox(bb)
+    def draw_box(self, bb:Bbox) -> None :
         i = ImageDraw.Draw(self.img)
         i.rectangle([(bb[0],bb[1]),(bb[2],bb[3])], fill=None, outline="red")
 
     def relbox_to_bbox(self, bb:Relbox) -> Bbox :
-        return (bb[0] + self.center_x, bb[1] + self.center_y, 
-                bb[2] + self.center_x, bb[3] + self.center_y)
+        return (bb[0] - self.offset_x, bb[1] - self.offset_y, 
+                bb[2] - self.offset_x, bb[3] - self.offset_y)
     
     def bbox_to_relbox(self, bb:Bbox) -> Relbox :
-        return (bb[0] - self.center_x, bb[1] - self.center_y,
-                bb[2] - self.center_x, bb[3] - self.center_y)
+        return (bb[0] + self.offset_x, bb[1] + self.offset_y,
+                bb[2] + self.offset_x, bb[3] + self.offset_y)
 
     def draw_hitboxes(self) -> None :
         TINT_COLOR=(255,0,0)
@@ -213,8 +200,8 @@ class Sprite() :
         draw = ImageDraw.Draw(overlay)
 
         for hb in self.hitboxes :
-            tl_x = self.canvas_w - (self.center_x - hb.c_x)
-            tl_y = self.canvas_h - (self.center_y - hb.c_y)
+            tl_x = self.offset_x + hb.c_x
+            tl_y = self.offset_y + hb.c_y
             draw.rectangle([(tl_x, tl_y), (tl_x + hb.w, tl_y + hb.h)], fill=TINT_COLOR+(OPACITY,), outline="red")
         
         self.img = Image.alpha_composite(self.img, overlay)
@@ -228,8 +215,8 @@ class Sprite() :
         draw = ImageDraw.Draw(overlay)
 
         for hb in self.hurtboxes :
-            tl_x = self.canvas_w - (self.center_x - hb.c_x)
-            tl_y = self.canvas_h - (self.center_y - hb.c_y)
+            tl_x = self.offset_x + hb.c_x
+            tl_y = self.offset_y + hb.c_y
             draw.rectangle([(tl_x, tl_y), (tl_x + hb.w, tl_y + hb.h)], fill=TINT_COLOR+(OPACITY,), outline="blue")
         
         self.img = Image.alpha_composite(self.img, overlay)
@@ -244,11 +231,7 @@ class Sprite() :
         output += "\tCENTER_Y: %i\n" % self.center_y
         return output
     
-def get_maximal_bb(bbs: List[Relbox]) -> Relbox:
-    # we want to find the maximal bounding box _relative_ to
-    #   the center point. That's because we don't particularly care about
-    #   the exact x/ys, we just care about the difference of the x/ys
-    #   from the center point when we're trying to make the sprites align.
+def get_maximal_bb(bbs: List[Bbox]) -> Bbox:
     x,y,dx,dy = 700,700,0,0
     for bb in bbs :
         if bb[0] < x :
