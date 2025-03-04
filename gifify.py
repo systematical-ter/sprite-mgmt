@@ -61,8 +61,8 @@ class Sprite() :
     canvas_w: int
     canvas_h: int
     
-    center_x: int
-    center_y: int
+    offset_x: int
+    offset_y: int
 
     img : Image.Image
     duration: int
@@ -227,8 +227,8 @@ class Sprite() :
         output += "\tHURTBOXES: %i\n" % self.hurtbox_count
         output += "\tWIDTH: %i\n" % self.canvas_w
         output += "\tHEIGHT: %i\n" % self.canvas_h
-        output += "\tCENTER_X: %i\n" % self.center_x
-        output += "\tCENTER_Y: %i\n" % self.center_y
+        output += "\tOFFSET_X: %i\n" % self.offset_x
+        output += "\tOFFSET_Y: %i\n" % self.offset_y
         return output
     
 def get_maximal_bb(bbs: List[Bbox]) -> Bbox:
