@@ -309,23 +309,33 @@ def compile_sprites(sprites: List[Sprite], hitboxes: bool = False) -> List[Image
 
     return output
 
-def make_gif_from_namedurs(nds: List[Tuple[str, int]], filename: str, hitboxes: bool = False) :
+def make_gif_from_namedurs(nds: List[Tuple[str, int]], filename: str, hitboxes: bool = False, oformat: str = "PNG") :
     giffps = 16
     #giffps = giffps * 2
     imgs: List[Image.Image] = from_namedurs(nds, hitboxes)
-    imgs[0].save(filename, format="GIF", save_all=True, append_images=imgs[1:], duration=giffps, disposal=2, loop=0, transparency=0)
+    if oformat == "PNG" :
+        imgs[0].save(filename, format="PNG", save_all=True, append_images=imgs[1:], duration=giffps, disposal=1, loop=0)
+    elif oformat == "GIF" :
+        imgs[0].save(filename, format="GIF", save_all=True, append_images=imgs[1:], duration=giffps, disposal=2, loop=0, transparency=0)
+    else :
+        raise ValueError("Invalid output format provided.")
 
-def make_gif_from_names(names: List[str], filename: str, duration:int = 3, hitboxes: bool = False) :
+def make_gif_from_names(names: List[str], filename: str, duration:int = 3, hitboxes: bool = False, oformat: str = "PNG") :
     nds = list(zip(names, [duration]*len(names)))
-    make_gif_from_namedurs(nds, filename, hitboxes)
+    make_gif_from_namedurs(nds, filename, hitboxes, oformat)
 
-def make_gif_from_sprlocs_collocs(sprlocs: List[str], collocs: List[str], durs: List[int], filename: str, hitboxes: bool = False, overwrite: bool = False) :
+def make_gif_from_sprlocs_collocs(sprlocs: List[str], collocs: List[str], durs: List[int], filename: str, hitboxes: bool = False, overwrite: bool = False, oformat: str = "PNG") :
     imgs: List[Image.Image] = from_png_col_durs(sprlocs, collocs, durs, hitboxes)
     if not overwrite :
         if os.path.exists(filename) :
             raise ValueError("A file already exists at %s and overwrite is set to False." % filename)
         
-    imgs[0].save(filename, format="GIF", save_all=True, append_images=imgs[1:], duration=16, disposal=2, loop=0, transparency=0)
+    if oformat == "PNG" :
+        imgs[0].save(filename, format="PNG", save_all=True, append_images=imgs[1:], duration=16, disposal=1, loop=0)
+    elif oformat == "GIF" :
+        imgs[0].save(filename, format="GIF", save_all=True, append_images=imgs[1:], duration=16, disposal=2, loop=0, transparency=0)
+    else : 
+        raise ValueError("Invalid output format provided.")
 
 def _make_manual(names: List[str], images: List[Image.Image], durations: Union[List[int], int], hitboxes: bool = False) -> List[Image.Image]:
     # check if all lists are of the same length
@@ -346,13 +356,13 @@ def _make_manual(names: List[str], images: List[Image.Image], durations: Union[L
     
     return compile_sprites(sprites, hitboxes)
 
-def _from_given_paths(pngpaths, jsonpaths, duration, hb, overwrite, output) :
+def _from_given_paths(pngpaths, jsonpaths, duration, hb, overwrite, output, oformat) :
     pngs = pngpaths
     jsons = jsonpaths
     duration = [int(duration)] * len(pngs)
-    make_gif_from_sprlocs_collocs(pngs, jsons, duration, output, hb, overwrite)
+    make_gif_from_sprlocs_collocs(pngs, jsons, duration, output, hb, overwrite, oformat)
 
-def main(pngdir, jsondir, duration, hb, overwrite, output) :
+def main(pngdir, jsondir, duration, hb, overwrite, output, oformat) :
     pngs = filetools.find_sprites(pngdir)
     jsons = filetools.find_collision(jsondir)
 
@@ -360,7 +370,8 @@ def main(pngdir, jsondir, duration, hb, overwrite, output) :
     pngs = list(map(lambda x: os.path.join(pngdir, x), pngs))
     jsons = list(map(lambda x: os.path.join(jsondir, x), jsons))
     duration = [int(duration)] * len(pngs)
-    make_gif_from_sprlocs_collocs(pngs, jsons, duration, output, hb, overwrite)
+
+    make_gif_from_sprlocs_collocs(pngs, jsons, duration, output, hb, overwrite, oformat)
 
 if __name__ == "__main__" :
     parser = argparse.ArgumentParser(description="Generates a gif from a folder of PNG sprite files and a folder of JSON collision files.")
@@ -369,6 +380,8 @@ if __name__ == "__main__" :
     parser.add_argument("--duration", help="The duration of each frame.")
     parser.add_argument("--hb", action="store_true", help="Whether to render hitboxes.")
     parser.add_argument("--overwrite", action="store_true", help="If file already exists at output location, overwrite it.")
+    parser.add_argument("--oformat", choices=["GIF","PNG"], default="PNG", 
+        help="Wether to save as a GIF or PNG. Note that only animated PNGs can support partial transparency.")
     parser.add_argument("output", help="Path to save generated .gif to.")
 
     main(**vars(parser.parse_args()))
