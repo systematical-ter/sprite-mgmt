@@ -65,6 +65,6 @@ Given a directory of sprites and a directory of corresponding collision JSON dat
 Better control over creating the gif is available if you reference it from another script or using the eventually-to-be-made `spritemgmt.py` script/ui. I may add the option to set gif frame order with an input file.
 
 <p align="center">
-  <img src="test.gif" width="200px" /><img src="test_transparency.png" width="200px" /><br>
+  <img src="test.gif" width="200px" /><img src="test_transparency.png" height="200px" /><br>
   <i>neat.jpeg</i>
 </p>
