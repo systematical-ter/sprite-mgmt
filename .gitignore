@@ -16,3 +16,4 @@ uv.lock
 # ignore all images except ex
 *.png
 !ex.png
+!test_transparency.png

@@ -41,7 +41,7 @@ Tries to keep transparency where possible. I highly recommend ensuring that all 
 
 Given a series of pngs and collision information, generates animated gifs. Can choose whether to draw hitboxes/hurtboxes.
 ```
-usage: gifify.py [-h] [--pngdir PNGDIR] [--jsondir JSONDIR] [--duration DURATION] [--hb HB] [--overwrite] output
+usage: gifify.py [-h] [--pngdir PNGDIR] [--jsondir JSONDIR] [--duration DURATION] [--hb] [--overwrite] [--oformat {GIF,PNG}] output
 
 Generates a gif from a folder of PNG sprite files and a folder of JSON collision files.
 
@@ -55,6 +55,7 @@ options:
   --duration DURATION  The duration of each frame.
   --hb                 Whether to render hitboxes.
   --overwrite          If file already exists at output location, overwrite it.
+  --oformat {GIF,PNG}  Wether to save as a GIF or PNG. Note that only animated PNGs can support partial transparency.
   ```
 
 Still requires the `Pillow` package.
@@ -64,6 +65,6 @@ Given a directory of sprites and a directory of corresponding collision JSON dat
 Better control over creating the gif is available if you reference it from another script or using the eventually-to-be-made `spritemgmt.py` script/ui. I may add the option to set gif frame order with an input file.
 
 <p align="center">
-  <img src="test.gif" width="200px" /><img src="test_backthrow.gif" width="200px" /><br>
+  <img src="test.gif" width="200px" /><img src="test_transparency.png" width="200px" /><br>
   <i>neat.jpeg</i>
 </p>
