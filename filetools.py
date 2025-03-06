@@ -1,5 +1,4 @@
 import os
-import re
 from typing import List, Tuple
 
 def check_img_exists_and_png(loc) -> bool :
@@ -32,32 +31,16 @@ def find_files_in_directory(loc, ext="") -> List[str] :
     else :
         return matching_files
 
-# fuck this
-def _find_gifify_handholding(loc) -> Tuple[List[str], List[str]] :
-    possible_png_paths = r"^char_[a-z]{2}_img$|^img$|^png$"
-    possible_png_re = re.compile(possible_png_paths)
-    possible_json_paths = r"^char_[a-z]{2}_col$|^col$|^json$"
-    possible_json_re = re.compile(possible_json_paths)
-
-    curdir = [f for f in os.listdir(loc)]
-    found_png = list(filter(possible_png_re.match, curdir))
-    found_json = list(filter(possible_json_re.match, curdir))
-
-    if len(found_png) == 0 or len(found_json) == 0 :
-        raise ValueError("Was not able to find png or json folders at the provided loc: %s.\n\tPlease check the usage guide." % loc)
-
-    png_files = find_files_in_directory(os.path.join(loc, found_png[0]), ".png")
-    json_files = find_files_in_directory(os.path.join(loc, found_json[0]), ".json")
-
-    print(png_files[0])
-    print(json_files[1])
-    pass
+def _find_T(loc, ext) -> List[str] :
+    files = find_files_in_directory(loc, ext)
+    files.sort(key=lambda x: int(x.split("_")[1].split(".")[0].split("ex")[0]))
+    return files
 
 def find_sprites(loc) -> List[str] :
-    return find_files_in_directory(loc, ".png")
+    return _find_T(loc, ".png")
 
 def find_collision(loc) -> List[str] :
-    return find_files_in_directory(loc, ".json")
+    return _find_T(loc, ".json")
 
 # link pngs to jsons
 # awful performance, I'm sure I can do better, but it's a non-issue right now.
@@ -67,10 +50,11 @@ def ensure_order(pngs: List[str], jsons: List[str]) -> Tuple[List[str], List[str
 
     while len(pngs) > 0 :
         p = pngs.pop(0)
-        pname = os.path.splitext(p)[0]
+        pname = os.path.splitext(os.path.basename(p))[0]
         for i in range(0, len(jsons)) :
             j = jsons[i]
-            if pname == os.path.splitext(j)[0] :
+            json_name = os.path.splitext(os.path.basename(j))[0]
+            if pname == json_name or (pname + "01") == json_name :
                 out_png.append(p)
                 out_json.append(j)
                 break
