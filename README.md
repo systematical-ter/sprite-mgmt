@@ -48,7 +48,7 @@ Generates a gif from a folder of PNG sprite files and a folder of JSON collision
 positional arguments:
   output               Path to save generated .gif to.
 
-options:
+  options:
   -h, --help           show this help message and exit
   --pngdir PNGDIR      Path to directory containing PNG sprite files.
   --jsondir JSONDIR    Path to directory containing JSON collision files.
@@ -56,6 +56,7 @@ options:
   --hb                 Whether to render hitboxes.
   --overwrite          If file already exists at output location, overwrite it.
   --oformat {GIF,PNG}  Wether to save as a GIF or PNG. Note that only animated PNGs can support partial transparency.
+  --flip_y             Flip the output gif along the y axis.
   ```
 
 Still requires the `Pillow` package.
