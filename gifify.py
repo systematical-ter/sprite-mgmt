@@ -64,6 +64,7 @@ class Sprite() :
         h, w = img.size
         br_color = img.getpixel((w-1, h-1))
         if br_color != 0 :
+            print("fixing")
             img = self.remove_strange_behavior(img)
 
         # I'm not dealing with mouths. Crop them out so they don't
@@ -87,8 +88,9 @@ class Sprite() :
             self.hitboxes.append(Hurtbox(**hitbox))
 
     def remove_secondary_boxes(self, img: Image.Image, chunk_x: int) -> Image.Image :
-        img2 = Image.new("PA", img.size, 0)
+        img2 = Image.new("PA", img.size, img.getpixel((0,0)))
         img2.putpalette(img.palette)
+        img2.info["transparency"] = img.info["transparency"]
         _,h = img.size
 
         img = img.crop((0,0,chunk_x, h))
@@ -111,8 +113,6 @@ class Sprite() :
         :rtype: Image.Image
         """
         # create temporary image
-        img2 = Image.new("PA", img.size, 0)
-        img2.putpalette(img.palette)
 
         # find the transparent pixel box
         found_pixels = [i for i, pixel in enumerate(img.getdata()) if pixel == 0]
@@ -122,14 +122,20 @@ class Sprite() :
         # apparently x[0] ix y and x[1] is x for how I did it above.
         y_only = list(map(lambda x: x[0], found_pixels_coords))
         x_only = list(map(lambda x: x[1], found_pixels_coords))
-        min_x = reduce(lambda x,y : x if x < y else y, x_only)
+        min_x = reduce(lambda x,y : x if x < y else y, x_only)+1
         max_x = reduce(lambda x,y: x if x > y else y, x_only)
-        min_y = reduce(lambda x,y : x if x < y else y, y_only)
+        min_y = reduce(lambda x,y : x if x < y else y, y_only)+1
         max_y = reduce(lambda x,y: x if x > y else y, y_only)
+
+        img2 = Image.new("P", img.size, img.getpixel((min_x, min_y)))
+        img2.putpalette(img.palette)
+        img2.info["transparency"] = img.info["transparency"]
 
         # crop it and re-extend it
         img = img.crop((min_x, min_y, max_x, max_y))
         img2.paste(img, (min_x, min_y))
+        img2.info["transparency"] = img.info["transparency"]
+        img2.convert("RGBA").save("HUH.png")
         
         return img2
     
@@ -262,7 +268,7 @@ def compile_sprites(sprites: List[Sprite], hitboxes: bool = False) -> List[Image
             spr.draw_hurtboxes()
 
     # get the maximal bounding box, for centering purposes
-    maxbb: Relbox = get_maximal_bb([spr.get_bounding_bbox() for spr in sprites])
+    maxbb: Bbox = get_maximal_bb([spr.get_bounding_bbox() for spr in sprites])
 
     # crop according to maximal bounding box
     for spr in sprites :
