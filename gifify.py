@@ -64,7 +64,6 @@ class Sprite() :
         h, w = img.size
         br_color = img.getpixel((w-1, h-1))
         if br_color != 0 :
-            print("fixing")
             img = self.remove_strange_behavior(img)
 
         # I'm not dealing with mouths. Crop them out so they don't
