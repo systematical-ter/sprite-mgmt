@@ -33,6 +33,13 @@ class Sprite() :
     offset_x: int
     offset_y: int
 
+    has_mouth: bool
+    mouth_x: int
+    mouth_y: int
+    mouth_width: int
+    mouth_height: int
+    mouth_img: Image.Image
+
     img : Image.Image
     duration: int
 
@@ -70,8 +77,12 @@ class Sprite() :
         # I'm not dealing with mouths. Crop them out so they don't
         #   mess with position normalization.
         if len(jdict["Chunks"]) > 1 :
+            self.has_mouth = True
+            self.get_mouth(img, jdict["Chunks"][1])
             chunk_left_x = jdict["Chunks"][1]["SrcX"]
             img = self.remove_secondary_boxes(img, chunk_left_x)
+        else :
+            self.has_mouth = False
         
 
         self.img = img.convert("RGBA")
@@ -86,6 +97,30 @@ class Sprite() :
         self.hitboxes = []
         for hitbox in jdict["Hitboxes"] :
             self.hitboxes.append(Hurtbox(**hitbox))
+
+    def get_mouth(self, img, metadata) -> None :
+        x = int(metadata["X"])
+        y = int(metadata["Y"])
+        width = metadata["Width"]
+        height = metadata["Height"]
+        left = metadata["SrcX"]
+        top = metadata["SrcY"]
+        mouth_img = img.crop((left, top, left + width, top + height))
+        # mouth_img = mouth_img.crop(mouth_img.getbbox())
+
+        self.mouth_height = height
+        self.mouth_width = width
+        self.mouth_x = x
+        self.mouth_y = y
+        self.mouth_img = mouth_img
+
+    def draw_mouth(self) :
+        x = int(self.offset_x + self.mouth_x)
+        y = int(self.offset_y + self.mouth_y)
+
+        tmp_image = Image.new("RGBA", self.img.size)
+        tmp_image.paste(self.mouth_img, (x,y))
+        self.img.alpha_composite(tmp_image)
 
     def remove_secondary_boxes(self, img: Image.Image, chunk_x: int) -> Image.Image :
         img2 = Image.new("PA", img.size, img.getpixel((0,0)))
@@ -258,7 +293,15 @@ def from_png_col_durs(pngs: List[str], cols: List[str], durs: List[int], hitboxe
         if durs[i] > 30 :
             durs[i] = 30
         sprites.append(Sprite(coldata[i], images[i], durs[i]))
-
+    
+    # add option to toggle mouth later. I don't want to deal with it right now
+    # honestly I want to re-write basically the entire second half of this file
+    #   so I'll do this when I do that.
+    if True :
+        for i,spr in enumerate(sprites) :
+            if i % 2 == 0 :
+                if spr.has_mouth :
+                    spr.draw_mouth()
     return compile_sprites(sprites, hitboxes)
 
 def compile_sprites(sprites: List[Sprite], hitboxes: bool = False) -> List[Image.Image] :
@@ -298,6 +341,7 @@ def make_gif_from_names(names: List[str], filename: str, duration:int = 3, hitbo
 
 def make_gif_from_sprlocs_collocs(sprlocs: List[str], collocs: List[str], durs: List[int], filename: str, hitboxes: bool = False, overwrite: bool = False, oformat: str = "PNG", flip_y: bool = False) :
     imgs: List[Image.Image] = from_png_col_durs(sprlocs, collocs, durs, hitboxes)
+
     if not overwrite :
         if os.path.exists(filename) :
             raise ValueError("A file already exists at %s and overwrite is set to False." % filename)
@@ -305,6 +349,7 @@ def make_gif_from_sprlocs_collocs(sprlocs: List[str], collocs: List[str], durs: 
     if flip_y :
         for i,img in enumerate(imgs) :
             imgs[i] = img.transpose(method=Image.Transpose.FLIP_LEFT_RIGHT)
+
     if oformat == "PNG" :
         imgs[0].save(filename, format="PNG", save_all=True, append_images=imgs[1:], duration=16, disposal=1, loop=0)
     elif oformat == "GIF" :
@@ -328,7 +373,12 @@ def _make_manual(names: List[str], images: List[Image.Image], durations: Union[L
         if durations[i] > 30 :
             durations[i] = 30
         sprites.append(Sprite(coldata[i], images[i], durations[i]))
-    
+        
+    if True :
+        for i,spr in enumerate(sprites) :
+            if i % 2 == 0 :
+                if spr.has_mouth :
+                    spr.draw_mouth() 
     return compile_sprites(sprites, hitboxes)
 
 def _from_given_paths(pngpaths, jsonpaths, duration, hb, overwrite, output, oformat, flip_y: bool = False) :
