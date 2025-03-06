@@ -11,37 +11,6 @@ import filetools
 Bbox = Tuple[int, int, int, int]
 Relbox = Tuple[int, int, int, int]
 
-mode = "theyeet"
-
-if mode == "groundex" :
-    # 5b
-    images = ["tm201_0" + str(i) + ".png" for i in range(0,8)]
-    metadata = ["tm201_0" + str(i) + ".json" for i in range(0,8)]
-elif mode == "airex" :
-    # air dp
-    images = ["tm432_" + str(i) + ".png" for i in range(25,29)]
-    metadata = ["tm432_" + str(i) + ".json" for i in range(25,29)]
-elif mode == "airthrowex" :
-    # air throw
-    images = ["tm321_0" + str(i) + ".png" for i in range(2,7)]
-    metadata = ["tm321_0" + str(i) + ".json" for i in range(2,7)]
-elif mode =="backthrowex" :
-    # back throw
-    images = ["tm313_%s.png" % str(i).zfill(2) for i in range(0,14)]
-    metadata = ["tm313_%s.json" % str(i).zfill(2) for i in range(0,14)]
-elif mode =="theyeet" :
-    # 6c
-    images = ["tm213_%s.png" % str(i).zfill(2) for i in range(0,24)]
-    metadata = ["tm213_%s.json" % str(i).zfill(2) for i in range(0,24)]
-
-
-# # get palette + transparency
-# p, t = spriterecolor.get_palette_and_transparency("palette_ref.png")
-
-# # load images and then apply our palette
-# l_i = [Image.open(os.path.join(idirectory,i)) for i in images]
-# l_pi = [spriterecolor._apply_palette(i, p, t).convert("RGBA") for i in l_i]
-
 class Hurtbox() :
     w: int
     h: int
@@ -302,9 +271,7 @@ def compile_sprites(sprites: List[Sprite], hitboxes: bool = False) -> List[Image
     # iterate over sprites; add dur multiples of them in the list to imitate # of frames they are present
     output: List[Image.Image] = []
     for i,spr in enumerate(sprites):
-        img_l = [spr.img]
-        img_l = img_l * spr.duration
-        output.extend(img_l)
+        output.extend([spr.img] * spr.duration)
 
     return output
 
@@ -358,6 +325,8 @@ def _make_manual(names: List[str], images: List[Image.Image], durations: Union[L
 def _from_given_paths(pngpaths, jsonpaths, duration, hb, overwrite, output, oformat) :
     pngs = pngpaths
     jsons = jsonpaths
+    
+    pngs, jsons = filetools.ensure_order(pngs, jsons)
     duration = [int(duration)] * len(pngs)
     make_gif_from_sprlocs_collocs(pngs, jsons, duration, output, hb, overwrite, oformat)
 
