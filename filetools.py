@@ -65,12 +65,14 @@ def ensure_order(pngs: List[str], jsons: List[str]) -> Tuple[List[str], List[str
     out_png = []
     out_json = []
 
+    print(jsons)
     while len(pngs) > 0 :
         p = pngs.pop(0)
-        pname = os.path.splitext(p)[0]
+        pname = os.path.splitext(os.path.basename(p))[0]
         for i in range(0, len(jsons)) :
             j = jsons[i]
-            if pname == os.path.splitext(j)[0] :
+            json_name = os.path.splitext(os.path.basename(j))[0]
+            if pname == json_name or (pname + "01") == json_name :
                 out_png.append(p)
                 out_json.append(j)
                 break
