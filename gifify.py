@@ -295,12 +295,15 @@ def make_gif_from_names(names: List[str], filename: str, duration:int = 3, hitbo
     nds = list(zip(names, [duration]*len(names)))
     make_gif_from_namedurs(nds, filename, hitboxes, oformat)
 
-def make_gif_from_sprlocs_collocs(sprlocs: List[str], collocs: List[str], durs: List[int], filename: str, hitboxes: bool = False, overwrite: bool = False, oformat: str = "PNG") :
+def make_gif_from_sprlocs_collocs(sprlocs: List[str], collocs: List[str], durs: List[int], filename: str, hitboxes: bool = False, overwrite: bool = False, oformat: str = "PNG", flip_y: bool = False) :
     imgs: List[Image.Image] = from_png_col_durs(sprlocs, collocs, durs, hitboxes)
     if not overwrite :
         if os.path.exists(filename) :
             raise ValueError("A file already exists at %s and overwrite is set to False." % filename)
         
+    if flip_y :
+        for i,img in enumerate(imgs) :
+            imgs[i] = img.transpose(method=Image.Transpose.FLIP_LEFT_RIGHT)
     if oformat == "PNG" :
         imgs[0].save(filename, format="PNG", save_all=True, append_images=imgs[1:], duration=16, disposal=1, loop=0)
     elif oformat == "GIF" :
@@ -327,15 +330,15 @@ def _make_manual(names: List[str], images: List[Image.Image], durations: Union[L
     
     return compile_sprites(sprites, hitboxes)
 
-def _from_given_paths(pngpaths, jsonpaths, duration, hb, overwrite, output, oformat) :
+def _from_given_paths(pngpaths, jsonpaths, duration, hb, overwrite, output, oformat, flip_y: bool = False) :
     pngs = pngpaths
     jsons = jsonpaths
     
     pngs, jsons = filetools.ensure_order(pngs, jsons)
     duration = [int(duration)] * len(pngs)
-    make_gif_from_sprlocs_collocs(pngs, jsons, duration, output, hb, overwrite, oformat)
+    make_gif_from_sprlocs_collocs(pngs, jsons, duration, output, hb, overwrite, oformat, flip_y)
 
-def main(pngdir, jsondir, duration, hb, overwrite, output, oformat) :
+def main(pngdir, jsondir, duration, hb, overwrite, output, oformat, flip_y) :
     pngs = filetools.find_sprites(pngdir)
     jsons = filetools.find_collision(jsondir)
 
@@ -344,7 +347,7 @@ def main(pngdir, jsondir, duration, hb, overwrite, output, oformat) :
     jsons = list(map(lambda x: os.path.join(jsondir, x), jsons))
     duration = [int(duration)] * len(pngs)
 
-    make_gif_from_sprlocs_collocs(pngs, jsons, duration, output, hb, overwrite, oformat)
+    make_gif_from_sprlocs_collocs(pngs, jsons, duration, output, hb, overwrite, oformat, flip_y)
 
 if __name__ == "__main__" :
     parser = argparse.ArgumentParser(description="Generates a gif from a folder of PNG sprite files and a folder of JSON collision files.")
@@ -355,6 +358,7 @@ if __name__ == "__main__" :
     parser.add_argument("--overwrite", action="store_true", help="If file already exists at output location, overwrite it.")
     parser.add_argument("--oformat", choices=["GIF","PNG"], default="PNG", 
         help="Wether to save as a GIF or PNG. Note that only animated PNGs can support partial transparency.")
+    parser.add_argument("--flip_y", action="store_true", help="Flip the output gif along the y axis.")
     parser.add_argument("output", help="Path to save generated .gif to.")
 
     main(**vars(parser.parse_args()))
