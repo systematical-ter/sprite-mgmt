@@ -1,5 +1,4 @@
 import os
-import re
 from typing import List, Tuple
 
 def check_img_exists_and_png(loc) -> bool :
