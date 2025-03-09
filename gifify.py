@@ -1,6 +1,6 @@
 import argparse
 from functools import reduce
-from typing import List, Tuple, Union
+from typing import Dict, List, Tuple, Union
 from PIL import Image, ImageDraw
 import os
 import json
@@ -23,39 +23,135 @@ class Hurtbox() :
         self.c_x = X
         self.c_y = Y
 
+class Box() :
+    x: int
+    y: int
+    w: int
+    h: int
+
+    def __init__(self, x, y, w, h) :
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+
+class ImgBox(Box) :
+    img: Image.Image
+
+    def __init__(self, x, y, w, h, img) :
+        super(x,y,w,h)
+        self.img = img
+
 class Sprite() :
-    hitbox_count: int
-    hurtbox_count: int
-
-    canvas_w: int
-    canvas_h: int
-    
-    offset_x: int
-    offset_y: int
-
-    has_mouth: bool
-    mouth_x: int
-    mouth_y: int
-    mouth_width: int
-    mouth_height: int
-    mouth_img: Image.Image
-
     img : Image.Image
     duration: int
 
+    coldata_init:bool = False
+    # Sprite must have had its collision data loaded to fill the
+    #   attributes below.
+
+    # Sprite canvas information
+    #   (used for hithurtbox & mouth drawing)
+    canvas_w: int
+    canvas_h: int
+    offset_x: int
+    offset_y: int
+
+    # Sprite "mouth" information
+    has_mouth: bool
+    mouth_box: ImgBox
+
+    # Sprite hit/hurt box information
     hurtboxes: List[Hurtbox]
     hitboxes: List[Hurtbox]
 
-    def __init__(self, jdict, img, duration) :
-        self.hitbox_count = jdict["Header"]["hitboxCount"]
-        self.hurtbox_count = jdict["Header"]["hurtboxCount"]
+    def __init__(self, img: Image.Image) :
+        # Technically, minimal info we need for a Sprite is just an image.
 
-        # ignoring mouths and secondary chunks for now.
+        # Ensure transparency exists:
+        if "transparency" not in img.info.keys() :
+            img.info["transparency"] = b'\x00' #sets color 0 to transparent
+
+        # Check if image has the weird orange background issue
+        #    e.g. terumi 030_06
+        h, w = img.size
+        br_color = img.getpixel((w-1, h-1))
+        if br_color != 0 :
+            img = Sprite.remove_abnormal_bg(img)
+
+        # .. and that's all we can do without collision metadata!
+        self.img = img
+
+    @classmethod
+    def fromImageFile(cls, filename: str) :
+        return cls(Image.open(filename))
+
+    def init_col_metadata(self, coldict: Dict[str, str]) :
+        """Add metadata read from a _col file to this sprite.
+        Reads in canvas size information, sprite offset information.
+            chunk information (e.g. whether/where there is a mouth),
+            hitbox and hurtbox information.
+
+        :param coldict: The json dict from a sprite's associated .json file
+        :type coldict: Dict[str, str]
+        """
+        # realizing that I'm kind of doing this backwards --
+        #   col metadata cnotains the images related to it in the header
+        #   so technically I should be starting with the headers.
+        #   but oh well, I will refactor this to support that method
+        #   of work later.
+
+        c:Dict[str, str] = coldict["Chunks"][0]
+        self.canvas_w = c["Width"]
+        self.canvas_h = c["Height"]
+
+        # hitboxes (& mouthbox) are based on the character sprite offset
+        #   which is stored as a negative for some reason I haven't found
+        #   important yet...
+        self.offset_x = -c["X"]
+        self.offset_y = -c["Y"]
+
+        # if there is more than 1 chunk in the coldata, that means
+        #   (as far as I am aware) that there is a mouth sprite.
+        #   handle it.
+        if len(coldict["Chunks"]) > 1 :
+            self.has_mouth = True
+            self.mouth_box = Sprite._get_mouth(self.img, coldict["Chunks"][1])
+
+            self.img = Sprite.remove_secondary_boxes(self.img, coldict["Chunks"][1])
+        else :
+            self.has_mouth = False
+
+        # load in (hit|hurt)boxes
+        self.hurtboxes = []
+        for hurtbox in coldict["Hurtboxes"] :
+            self.hurtboxes.append(Hurtbox(**hurtbox))
+        
+        self.hitboxes = []
+        for hitbox in coldict["Hitboxes"] :
+            self.hitboxes.append(Hurtbox(**hitbox))
+
+        # got everything -- mark coldata as initialized
+        self.coldata_init = True
+
+    def init_col_file(self, filename:str) :
+        """Add metadata from a _col.json file to this sprite.
+        (Just reads the file and calls Sprite.init_col_metadata)
+
+        :param filename: Path to a .json file to associate with this sprite.
+        :type filename: str
+        """
+        coldata: Dict[str, str]
+        with open(filename, 'r') as f:
+            coldata = json.load(f)
+        self.init_col_metadata(coldata)
+
+    def Old__init__(self, jdict, img, duration) :
         c = jdict["Chunks"][0]
         self.canvas_w = c["Width"]
         self.canvas_h = c["Height"]
 
-        # hitboxes are based on the character sprite offset
+        # hitboxes (& mouthbox) are based on the character sprite offset
         #   which is stored in negative for some reason.
         self.offset_x = -c["X"]
         self.offset_y = -c["Y"]
@@ -73,18 +169,18 @@ class Sprite() :
         if br_color != 0 :
             img = self.remove_strange_behavior(img)
 
-
-        # I'm not dealing with mouths. Crop them out so they don't
-        #   mess with position normalization.
         if len(jdict["Chunks"]) > 1 :
             self.has_mouth = True
-            self.get_mouth(img, jdict["Chunks"][1])
+            self.mouth_box = Sprite._get_mouth(img, jdict["Chunks"][1])
+
+            # TODO: make this a little easier to read.
             chunk_left_x = jdict["Chunks"][1]["SrcX"]
             img = self.remove_secondary_boxes(img, chunk_left_x)
         else :
             self.has_mouth = False
         
 
+        # convert to RGBA for drawing purposes later
         self.img = img.convert("RGBA")
         self.tl_x, self.tl_y,_,_ = self.img.getbbox()
         #self.draw_center()
@@ -98,7 +194,8 @@ class Sprite() :
         for hitbox in jdict["Hitboxes"] :
             self.hitboxes.append(Hurtbox(**hitbox))
 
-    def get_mouth(self, img, metadata) -> None :
+    @classmethod
+    def _get_mouth(cls, img, metadata) -> ImgBox :
         x = int(metadata["X"])
         y = int(metadata["Y"])
         width = metadata["Width"]
@@ -106,33 +203,31 @@ class Sprite() :
         left = metadata["SrcX"]
         top = metadata["SrcY"]
         mouth_img = img.crop((left, top, left + width, top + height))
-        # mouth_img = mouth_img.crop(mouth_img.getbbox())
 
-        self.mouth_height = height
-        self.mouth_width = width
-        self.mouth_x = x
-        self.mouth_y = y
-        self.mouth_img = mouth_img
-
+        return Box(x, y, width, height, mouth_img)
+    
     def draw_mouth(self) :
-        x = int(self.offset_x + self.mouth_x)
-        y = int(self.offset_y + self.mouth_y)
+        x = int(self.offset_x + self.mouth_box.x)
+        y = int(self.offset_y + self.mouth_box.y)
 
         tmp_image = Image.new("RGBA", self.img.size)
-        tmp_image.paste(self.mouth_img, (x,y))
+        tmp_image.paste(self.mouth_box.img, (x,y))
         self.img.alpha_composite(tmp_image)
 
-    def remove_secondary_boxes(self, img: Image.Image, chunk_x: int) -> Image.Image :
+    @classmethod
+    def remove_secondary_boxes(cls, img: Image.Image, chunk: Dict[str, str]) -> Image.Image :
         img2 = Image.new("PA", img.size, img.getpixel((0,0)))
         img2.putpalette(img.palette)
         img2.info["transparency"] = img.info["transparency"]
         _,h = img.size
 
+        chunk_x = chunk["SrcX"]
         img = img.crop((0,0,chunk_x, h))
         img2.paste(img, (0,0))
         return img2
     
-    def remove_strange_behavior(self, img: Image.Image) -> Image.Image:
+    @classmethod
+    def remove_abnormal_bg(cls, img: Image.Image) -> Image.Image:
         """Fix strange miscolored backgrounds
 
         Some images have strange behavior where the image is filled
@@ -170,7 +265,6 @@ class Sprite() :
         img = img.crop((min_x, min_y, max_x, max_y))
         img2.paste(img, (min_x, min_y))
         img2.info["transparency"] = img.info["transparency"]
-        img2.convert("RGBA").save("HUH.png")
         
         return img2
     
@@ -183,80 +277,101 @@ class Sprite() :
     def crop_to_box(self, bb: Bbox) -> None :
         self.img = self.img.crop(bb)
 
-    def draw_center(self) -> None :
-        i = ImageDraw.Draw(self.img)
-        x,y = self.center_x, self.center_y
-        i.rectangle([(x-5, y-5),(x+5,y+5)], fill="red")
+    def draw_hbox(self, color: Tuple[int, int, int], boxname: str) -> None:
+        """Draws [hit|hurt]boxes onto this sprite's Img.
 
-    def draw_box(self, bb:Bbox) -> None :
-        i = ImageDraw.Draw(self.img)
-        i.rectangle([(bb[0],bb[1]),(bb[2],bb[3])], fill=None, outline="red")
+        :param color: A 3-ple with values [0-255] representing the color to make these boxes. (Generally, hitboxes are (255,0,0) and hurtboxes are (0,0,255).)
+        :type color: Tuple[int, int, int]
+        :param boxname: One of (Hitbox|Hurtbox) signifying whether to draw the hitboxes or hurtboxes.
+        :type boxname: str
+        """
+        TINT_COLOR: Tuple[int, int, int] = color
+        TRANSPARENCY = .3
+        OPACITY= int(255*TRANSPARENCY)
 
-    def relbox_to_bbox(self, bb:Relbox) -> Bbox :
-        return (bb[0] - self.offset_x, bb[1] - self.offset_y, 
-                bb[2] - self.offset_x, bb[3] - self.offset_y)
-    
-    def bbox_to_relbox(self, bb:Bbox) -> Relbox :
-        return (bb[0] + self.offset_x, bb[1] + self.offset_y,
-                bb[2] + self.offset_x, bb[3] + self.offset_y)
+        overlay: Image.Image = Image.new('RGBA', self.img.size, TINT_COLOR+(0,))
+        draw: ImageDraw.ImageDraw = ImageDraw.Draw(overlay)
+
+        hb: Hurtbox
+        for hb in self.__getattribute__(boxname) :
+            tl_x: int = self.offset_x + hb.c_x
+            tl_y: int = self.offset_y + hb.c_y
+            draw.rectangle([(tl_x, tl_y), (tl_x + hb.w, tl_y + hb.h)], fill=TINT_COLOR+(OPACITY,), outline=TINT_COLOR)
+        
+        self.img = Image.alpha_composite(self.img, overlay)
 
     def draw_hitboxes(self) -> None :
+        """Draw Hitboxes onto this sprite's Img.
+        """
         TINT_COLOR=(255,0,0)
-        TRANSPARENCY = .3
-        OPACITY= int(255*TRANSPARENCY)
-
-        overlay = Image.new('RGBA', self.img.size, TINT_COLOR+(0,))
-        draw = ImageDraw.Draw(overlay)
-
-        for hb in self.hitboxes :
-            tl_x = self.offset_x + hb.c_x
-            tl_y = self.offset_y + hb.c_y
-            draw.rectangle([(tl_x, tl_y), (tl_x + hb.w, tl_y + hb.h)], fill=TINT_COLOR+(OPACITY,), outline="red")
-        
-        self.img = Image.alpha_composite(self.img, overlay)
+        self.draw_hbox(TINT_COLOR, "hitboxes")
     
     def draw_hurtboxes(self) -> None :
+        """Draw Hurtboxes onto this sprite's Img.
+        """
         TINT_COLOR=(0,0,255)
-        TRANSPARENCY = .3
-        OPACITY= int(255*TRANSPARENCY)
-
-        overlay = Image.new('RGBA', self.img.size, TINT_COLOR+(0,))
-        draw = ImageDraw.Draw(overlay)
-
-        for hb in self.hurtboxes :
-            tl_x = self.offset_x + hb.c_x
-            tl_y = self.offset_y + hb.c_y
-            draw.rectangle([(tl_x, tl_y), (tl_x + hb.w, tl_y + hb.h)], fill=TINT_COLOR+(OPACITY,), outline="blue")
-        
-        self.img = Image.alpha_composite(self.img, overlay)
+        self.draw_hbox(TINT_COLOR, "hurtboxes")
 
     def __str__(self):
         output = "IMAGE OBJECT\n"
-        output += "\tHITBOXES: %i\n" % self.hitbox_count
-        output += "\tHURTBOXES: %i\n" % self.hurtbox_count
         output += "\tWIDTH: %i\n" % self.canvas_w
         output += "\tHEIGHT: %i\n" % self.canvas_h
         output += "\tOFFSET_X: %i\n" % self.offset_x
         output += "\tOFFSET_Y: %i\n" % self.offset_y
         return output
     
-def get_maximal_bb(bbs: List[Bbox]) -> Bbox:
-    x,y,dx,dy = 700,700,0,0
-    for bb in bbs :
-        if bb[0] < x :
-            x = bb[0]
-        if bb[1] < y :
-            y = bb[1]
-        if bb[2] > dx :
-            dx = bb[2]
-        if bb[3] > dy :
-            dy = bb[3]
-    return (x,y,dx,dy)
+    @classmethod
+    def get_maximal_bb(cls, sprs: List['Sprite']) -> Bbox :
+        x,y,dx,dy = 700,700,0,0
+        
+        spr: Sprite
+        for spr in sprs:
+            bb: Bbox = spr.get_bounding_bbox()
+            if bb[0] < x :
+                x = bb[0]
+            if bb[1] < y :
+                y = bb[1]
+            if bb[2] > dx :
+                dx = bb[2]
+            if bb[3] > dy :
+                dy = bb[3]
+        return (x,y,dx,dy)
+
+    ###### DEBUG METHODS ######
+    def _draw_center(self) -> None :
+        """Debug method -- draw a box around the sprite's offset point.
+        """
+        i: ImageDraw.ImageDraw = ImageDraw.Draw(self.img)
+        x,y = self.offset_x, self.offset_y
+        i.rectangle([(x-5, y-5),(x+5,y+5)], fill="red")
+
+    def _draw_box(self, bb:Bbox) -> None :
+        """Debug method - draw a red box at the given location.
+
+        :param bb: Box to draw.
+        :type bb: Bbox
+        """
+        i: ImageDraw.ImageDraw = ImageDraw.Draw(self.img)
+        i.rectangle([(bb[0],bb[1]),(bb[2],bb[3])], fill=None, outline="red")
+
+    def _relbox_to_bbox(self, bb:Relbox) -> Bbox :
+        """Given a box relative to the sprite's offset, returns an absolute box.
+        """
+        return (bb[0] - self.offset_x, bb[1] - self.offset_y, 
+                bb[2] - self.offset_x, bb[3] - self.offset_y)
+    
+    def _bbox_to_relbox(self, bb:Bbox) -> Relbox :
+        """Given an absolute box, returns a box relative to the sprite's offset.
+        """
+        return (bb[0] + self.offset_x, bb[1] + self.offset_y,
+                bb[2] + self.offset_x, bb[3] + self.offset_y)
 
 # should be 2 modes of operation:
 #   1. list of sprite names provided
 #   2. tuples of names + duration provided
 # for now I'm ignoring spawned entities.
+
+#### YouLiveLikeThis?.png
 
 def get_png_paths(names: List[str]) -> List[str] :
     basedir = "exported_data/char_tm_img"
@@ -311,7 +426,7 @@ def compile_sprites(sprites: List[Sprite], hitboxes: bool = False) -> List[Image
             spr.draw_hurtboxes()
 
     # get the maximal bounding box, for centering purposes
-    maxbb: Bbox = get_maximal_bb([spr.get_bounding_bbox() for spr in sprites])
+    maxbb: Bbox = Sprite.get_maximal_bb(sprites)
 
     # crop according to maximal bounding box
     for spr in sprites :
