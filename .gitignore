@@ -17,3 +17,14 @@ uv.lock
 *.png
 !ex.png
 !test_transparency.png
+*.gif
+!test.gif
+
+# test data files (I don't really want to mess with copyright)
+tests/outputs/
+tests/counter_super_test/
+tests/taunt_test/
+
+# etc files I have laying around
+scr_tm.py
+secrets

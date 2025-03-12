@@ -1,3 +1,4 @@
+import json
 import os
 from typing import List, Tuple
 
@@ -6,6 +7,13 @@ def check_img_exists_and_png(loc) -> bool :
         raise ValueError("Provided image %s does not exist." % loc)
     if not os.path.normpath(loc).endswith("png") :
         raise ValueError("Provided file %s is not a .png." % loc)
+    return True
+
+def check_coll_exists_and_json(loc) -> bool :
+    if not os.path.exists(loc) :
+        raise ValueError("Provided collision data file %s does not exist." % loc)
+    if not os.path.normpath(loc).endswith("json") :
+        raise ValueError("Provided file %s is not a .json." % loc)
     return True
 
 def make_dir(loc) :
@@ -33,7 +41,6 @@ def find_files_in_directory(loc, ext="") -> List[str] :
 
 def _find_T(loc, ext) -> List[str] :
     files = find_files_in_directory(loc, ext)
-    files.sort(key=lambda x: int(x.split("_")[1].split(".")[0].split("ex")[0]))
     return files
 
 def find_sprites(loc) -> List[str] :
@@ -42,27 +49,25 @@ def find_sprites(loc) -> List[str] :
 def find_collision(loc) -> List[str] :
     return _find_T(loc, ".json")
 
-# link pngs to jsons
-# awful performance, I'm sure I can do better, but it's a non-issue right now.
-def ensure_order(pngs: List[str], jsons: List[str]) -> Tuple[List[str], List[str]] :
-    out_png = []
-    out_json = []
+def read_collision_json(fileloc) -> str :
+    out: str = ""
+    with open(fileloc, 'r') as f:
+        out = json.load(f)
+    return out
 
-    while len(pngs) > 0 :
-        p = pngs.pop(0)
-        pname = os.path.splitext(os.path.basename(p))[0]
-        for i in range(0, len(jsons)) :
-            j = jsons[i]
-            json_name = os.path.splitext(os.path.basename(j))[0]
-            if pname == json_name or (pname + "01") == json_name :
-                out_png.append(p)
-                out_json.append(j)
-                break
-        else :
-            # TODO: found the ex versions. gotta make sure I turn those into Sprite objs in gifify.
-            print("Could not find matching JSON for PNG with name: %s" % p)
-    
-    return(out_png, out_json)
+def find_image(name:str, dir:str) -> str :
+    """Returns the path to an image named `name` in `dir`, if present.
 
-#a = filetools.find_sprites("exported_data/char_tm_img")
-#b = filetools.find_collision("exported_data/char_tm_col")
+    :param name: Name of the image to look for.
+    :type name: str
+    :param dir: Directory where images are expected to be.
+    :type dir: str
+    :return: The path to the image, if it exists.
+    :rtype: str
+    """
+    _validate_dir_exists(dir)
+    expected_loc = os.path.join(dir, name + ".png")
+    if os.path.exists(expected_loc) and os.path.isfile(expected_loc) :
+        return expected_loc
+    else :
+        raise FileNotFoundError("Could not find an image named %s in %s." % (name, dir))
