@@ -29,12 +29,38 @@ def test_Spr_weird_bg() :
     spr: Sprite = Sprite.fromImageFile("exported_data/char_tm_img/tm030_06.png")
     #spr.img.show()
 
-def test_SprColl_fromFiles() :
+def test_SprColl_fromNameImgs() :
     params = {
         "names"             : 
-            ["tm201_0" + str(i) + ".png" for i in range(0,8)],
-        "img_path"          :
+            ["tm201_0" + str(i) for i in range(0,8)],
+        "img_dir"          :
             "exported_data/char_tm_img",
         }
 
-    SprCollection.from_images_names()
+    coll = SprCollection.from_names_imgonly(**params)
+    imgs = coll.compile_sprites()
+    imgs[0].save("tests/outputs/test_SprColl_fromNameImgs.png", format = "PNG",  save_all=True, append_images=imgs[1:], duration=16, disposal=1, loop=0)
+
+def test_SprColl_fromCollDir() :
+    params = {
+        "clsn_dir": "tests/taunt_test",
+        "img_dir": "tests/taunt_test"
+    }
+
+    coll = SprCollection.from_collision_directory(**params)
+    imgs = coll.compile_sprites(True)
+    imgs[0].save("tests/outputs/test_SprColl_fromCollDir.png", format = "PNG",  save_all=True, append_images=imgs[1:], duration=16, disposal=1, loop=0)
+
+def test_SprColl_fromNameClsns() :
+    params = {
+        "names"             : 
+            ["tm201_0" + str(i) for i in range(0,8)],
+        "img_dir"           :
+            "exported_data/char_tm_img",
+        "clsn_dir"          :
+            "exported_data/char_tm_col/JSONs"
+    }
+
+    coll = SprCollection.from_names_clsns(**params)
+    imgs = coll.compile_sprites(True)
+    imgs[0].save("tests/outputs/test_SprColl_FromNameClsns.png", format = "PNG",  save_all=True, append_images=imgs[1:], duration=16, disposal=1, loop=0)
