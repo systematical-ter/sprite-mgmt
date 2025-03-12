@@ -1,4 +1,5 @@
 import os
+import re
 from typing import List, Tuple
 
 def check_img_exists_and_png(loc) -> bool :
@@ -33,7 +34,7 @@ def find_files_in_directory(loc, ext="") -> List[str] :
 
 def _find_T(loc, ext) -> List[str] :
     files = find_files_in_directory(loc, ext)
-    files.sort(key=lambda x: int(x.split("_")[1].split(".")[0].split("ex")[0]))
+    #files.sort(key=lambda x: int(re.search("[0-9]+",x.split("_")[1].split(".")[0].split("ex")[0]).group(0)))
     return files
 
 def find_sprites(loc) -> List[str] :
