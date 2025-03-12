@@ -1,5 +1,5 @@
 from functools import reduce
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 from PIL import Image, ImageDraw
 import json
 import filetools as ft
@@ -8,7 +8,7 @@ import os
 Bbox = Tuple[int, int, int, int]
 Relbox = Tuple[int, int, int, int]
 
-class Hurtbox() :
+class HBox() :
     w: int
     h: int
     c_x: int
@@ -36,7 +36,7 @@ class ImgBox(Box) :
     img: Image.Image
 
     def __init__(self, x, y, w, h, img) :
-        super(x,y,w,h)
+        super().__init__(x,y,w,h)
         self.img = img
 
 class Sprite() :
@@ -59,8 +59,8 @@ class Sprite() :
     mouth_box: ImgBox
 
     # Sprite hit/hurt box information
-    hurtboxes: List[Hurtbox]
-    hitboxes: List[Hurtbox]
+    hurtboxes: List[HBox]
+    hitboxes: List[HBox]
 
     def __init__(self, img: Image.Image) :
         # Technically, minimal info we need for a Sprite is just an image.
@@ -118,7 +118,6 @@ class Sprite() :
         if len(coldict["Chunks"]) > 1 :
             self.has_mouth = True
             self.mouth_box = Sprite._get_mouth(self.img, coldict["Chunks"][1])
-
             self.img = Sprite.remove_secondary_boxes(self.img, coldict["Chunks"][1])
         else :
             self.has_mouth = False
@@ -126,13 +125,14 @@ class Sprite() :
         # load in (hit|hurt)boxes
         self.hurtboxes = []
         for hurtbox in coldict["Hurtboxes"] :
-            self.hurtboxes.append(Hurtbox(**hurtbox))
+            self.hurtboxes.append(HBox(**hurtbox))
         
         self.hitboxes = []
         for hitbox in coldict["Hitboxes"] :
-            self.hitboxes.append(Hurtbox(**hitbox))
+            self.hitboxes.append(HBox(**hitbox))
 
         # got everything -- mark coldata as initialized
+        self.img = self.img.convert("RGBA")
         self.coldata_init = True
     
     def set_duration(self, duration:int) :
@@ -150,54 +150,6 @@ class Sprite() :
             coldata = json.load(f)
         self.init_col_metadata(coldata)
 
-    def Old__init__(self, jdict, img, duration) :
-        c = jdict["Chunks"][0]
-        self.canvas_w = c["Width"]
-        self.canvas_h = c["Height"]
-
-        # hitboxes (& mouthbox) are based on the character sprite offset
-        #   which is stored in negative for some reason.
-        self.offset_x = -c["X"]
-        self.offset_y = -c["Y"]
-
-        # sets the first color to be completely transparent only if
-        #   transparency has not already been defined.
-        if "transparency" not in img.info.keys() :
-            img.info["transparency"] = b'\x00'
-
-        # check if the background is weird -- 
-        #    e.g. terumi 030_06 has a weird error where
-        #    a huge chunk of it is orange
-        h, w = img.size
-        br_color = img.getpixel((w-1, h-1))
-        if br_color != 0 :
-            img = self.remove_strange_behavior(img)
-
-        if len(jdict["Chunks"]) > 1 :
-            self.has_mouth = True
-            self.mouth_box = Sprite._get_mouth(img, jdict["Chunks"][1])
-
-            # TODO: make this a little easier to read.
-            chunk_left_x = jdict["Chunks"][1]["SrcX"]
-            img = self.remove_secondary_boxes(img, chunk_left_x)
-        else :
-            self.has_mouth = False
-        
-
-        # convert to RGBA for drawing purposes later
-        self.img = img.convert("RGBA")
-        self.tl_x, self.tl_y,_,_ = self.img.getbbox()
-        #self.draw_center()
-        self.duration = int(duration)
-
-        self.hurtboxes = []
-        for hurtbox in jdict["Hurtboxes"] :
-            self.hurtboxes.append(Hurtbox(**hurtbox))
-        
-        self.hitboxes = []
-        for hitbox in jdict["Hitboxes"] :
-            self.hitboxes.append(Hurtbox(**hitbox))
-
     @classmethod
     def _get_mouth(cls, img, metadata) -> ImgBox :
         x = int(metadata["X"])
@@ -208,7 +160,7 @@ class Sprite() :
         top = metadata["SrcY"]
         mouth_img = img.crop((left, top, left + width, top + height))
 
-        return Box(x, y, width, height, mouth_img)
+        return ImgBox(x, y, width, height, mouth_img)
     
     def draw_mouth(self) :
         x = int(self.offset_x + self.mouth_box.x)
@@ -286,7 +238,7 @@ class Sprite() :
 
         :param color: A 3-ple with values [0-255] representing the color to make these boxes. (Generally, hitboxes are (255,0,0) and hurtboxes are (0,0,255).)
         :type color: Tuple[int, int, int]
-        :param boxname: One of (Hitbox|Hurtbox) signifying whether to draw the hitboxes or hurtboxes.
+        :param boxname: One of (Hitbox|HBox) signifying whether to draw the hitboxes or hurtboxes.
         :type boxname: str
         """
         TINT_COLOR: Tuple[int, int, int] = color
@@ -296,7 +248,7 @@ class Sprite() :
         overlay: Image.Image = Image.new('RGBA', self.img.size, TINT_COLOR+(0,))
         draw: ImageDraw.ImageDraw = ImageDraw.Draw(overlay)
 
-        hb: Hurtbox
+        hb: HBox
         for hb in self.__getattribute__(boxname) :
             tl_x: int = self.offset_x + hb.c_x
             tl_y: int = self.offset_y + hb.c_y
@@ -373,44 +325,145 @@ class Sprite() :
 class SprCollection() :
     # storing sprites by "name" so we can easily reconnect with collision data
     sprites: Dict[str, Sprite]
+    eff_sprites: Dict[str, Sprite]
+    order: List[str]
+    # effect sprites are, theoretically, similar to sprites...
+    #   except they don't have collision information (I don't think).
+    #   I might still want to make them a separate class that doesn't
+    #   doesn't have the collision metadata handling.
+    # UPDATE :
+    #   this was wrong --- effect sprites actually DO have collision
+    #   metadata, it's just *usually* empty. (450_90 has an "unknown" 
+    #   box?)
 
     def __init__(self):
         self.sprites = {}
+        self.order = []
 
     @classmethod
     def from_image_directory(cls, directory: str) -> 'SprCollection':
-        coll = cls.__init__()
+        coll: 'SprCollection' = cls()
         sprs: List[str] = ft.find_sprites(directory)
         for sp in sprs :
             name: str = sp.split(".png")
             loaded_sprite: Sprite = Sprite.fromImageFile(os.path.join(directory, sp))
 
             coll.sprites[name] = loaded_sprite
+            coll.order.append(name)
 
+        return coll
+
+    @classmethod
+    def from_names_imgonly(cls, img_dir: str, names: List[str]) -> 'SprCollection' :
+        coll = cls()
+        for img, nm in [(os.path.join(img_dir, x + ".png"), x) for x in names] :
+            ft.check_img_exists_and_png(img)
+            coll.sprites[nm] = Sprite.fromImageFile(img)
+            coll.order.append(nm)
+        
         return coll
     
     @classmethod
-    def from_images_names(cls, images: List[Image.Image], names: List[str]) -> 'SprCollection' :
-        coll = cls.__init__()
-        for im, nm in zip(images, names) :
-            coll.sprites[nm] = Sprite.fromImage(im)
+    def from_prerecolored_imgs(cls, imgs: Dict[str, Image.Image]) -> 'SprCollection' :
+        coll: 'SprCollection' = cls()
+        for nm, img in imgs.items() :
+            loaded_sprite: Sprite = Sprite.fromImage(img)
+            coll.sprites[nm] = loaded_sprite
+            coll.order.append(nm)
+        
+        return coll
+    
+    @classmethod
+    def from_collision_directory(cls, clsn_dir: str, img_dir: str) -> 'SprCollection' :
+        coll: 'SprCollection' = cls()
+        clsns: List[str] = ft.find_collision(clsn_dir)
+
+        for clsn in clsns:
+            img_name, spr = SprCollection._create_from_collision(
+                os.path.join(clsn_dir, clsn), img_dir
+                )
+
+            coll.sprites[img_name] = spr
+            coll.order.append(img_name)
 
         return coll
 
-    def init_collision_directory(self, directory: str) :
-        colls: List[str] = ft.find_collision(directory) 
-        for coll in colls :
-            fullpath = os.path.join(directory, coll)
-            self.init_collision_file(fullpath)
+    @classmethod
+    def from_names_clsns(cls, img_dir:str, clsn_dir: str, names: List[str]) -> 'SprCollection' :
+        coll: 'SprCollection' = cls()
+        for clsn, nm in [(os.path.join(clsn_dir, x + ".json"), x) for x in names] :
+            ft.check_coll_exists_and_json(clsn)
+            img_name, spr = SprCollection._create_from_collision(
+                clsn, img_dir
+            )
 
-    def init_collision_file(self, filepath: str) :
-        with open(filepath, 'r') as f:
-            colldata = json.load(f)
-            self.init_collision_data(colldata)
+            coll.sprites[img_name] = spr
+            coll.order.append(img_name)
 
-    def init_collision_data(self, colldata: Dict[str, str]) :
-        related_spr = colldata["Header"]["Images"][0].split(".bmp")[0]
-        if related_spr in self.sprites.keys() :
-            self.sprites[related_spr].init_col_metadata(colldata)
-        else :
-            print("ERR: Unknown sprited requeste: %s" % related_spr)
+        return coll
+
+    @staticmethod
+    def _create_from_collision(clsn_file: str, img_dir: str) -> Tuple[str, Sprite] :
+        clsn_data = ft.read_collision_json(clsn_file)
+
+        # I checked before and this should be only a 0-len list.
+        # I can make this more futureproof later.
+        img_name: str = clsn_data["Header"]["Images"][0].split(".bmp")[0]
+        img_path: str = ft.find_image(img_name, img_dir)
+        # find associated image
+
+        spr: Sprite = Sprite.fromImageFile(img_path)
+        spr.init_col_metadata(clsn_data)
+        
+        return(img_name, spr)
+
+    def _add_collision(self, names: List[str], clsn_dir: str) -> None :
+        for clsn, nm in [(os.path.join(clsn_dir, x + ".json"), x) for x in names] :
+            ft.check_coll_exists_and_json(clsn)
+            clsn_data = ft.read_collision_json(clsn)
+
+            img_name: str = clsn_data["Header"]["Images"][0].split(".bmp")[0]
+            if img_name not in self.order :
+                raise ValueError("Collision data is pointing to a file I don't have in my list: %s" % img_name)
+            
+            self.sprites[img_name].init_col_metadata(clsn_data)
+
+    def override_duration(self, duration: Union[int, List[int]]) -> None :
+        if isinstance(duration, int) :
+            for spr in self.sprites.values() :
+                spr.duration = duration
+        elif isinstance(duration, List[int]) :
+            if len(duration) != len(self.sprites) :
+                raise ValueError("Provided list of durations gives %i durations, but I have %i sprites." % 
+                    (len(duration), len(list(self.sprites.values())))
+                    )
+            for dur, spr in zip(duration, self.sprites.values()) :
+                spr.duration = dur
+
+    def compile_sprites(self, hitboxes: bool = False, mouth: bool = False) -> List[Image.Image] :
+        spr_objs = self.sprites.values()
+        if mouth :
+            for i,nm in enumerate(self.order) :
+                if i % 2 == 0 :
+                    if self.sprites[nm].has_mouth :
+                        self.sprites[nm].draw_mouth() 
+
+        if hitboxes :
+            for spr in spr_objs :
+                spr.draw_hitboxes()
+                spr.draw_hurtboxes()
+
+        # crop according to maximal bounding box
+        maxbb: Bbox = Sprite.get_maximal_bb(spr_objs)
+        for spr in spr_objs :
+            spr.crop_to_box(maxbb)
+
+        # iterate over sprites; add dur multiples of them in the list to imitate # of frames they are present
+        output: List[Image.Image] = []
+        for nm in self.order :
+            spr = self.sprites[nm]
+            # no matter what, to make this work, they have to be converted to RGBA?
+            spr.img = spr.img.convert("RGBA")
+            output.extend([spr.img] * spr.duration)
+        # TODO : add effect sprites
+        return output

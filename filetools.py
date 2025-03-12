@@ -1,3 +1,4 @@
+import json
 import os
 import re
 from typing import List, Tuple
@@ -7,6 +8,13 @@ def check_img_exists_and_png(loc) -> bool :
         raise ValueError("Provided image %s does not exist." % loc)
     if not os.path.normpath(loc).endswith("png") :
         raise ValueError("Provided file %s is not a .png." % loc)
+    return True
+
+def check_coll_exists_and_json(loc) -> bool :
+    if not os.path.exists(loc) :
+        raise ValueError("Provided collision data file %s does not exist." % loc)
+    if not os.path.normpath(loc).endswith("json") :
+        raise ValueError("Provided file %s is not a .json." % loc)
     return True
 
 def make_dir(loc) :
@@ -42,6 +50,29 @@ def find_sprites(loc) -> List[str] :
 
 def find_collision(loc) -> List[str] :
     return _find_T(loc, ".json")
+
+def read_collision_json(fileloc) -> str :
+    out: str = ""
+    with open(fileloc, 'r') as f:
+        out = json.load(f)
+    return out
+
+def find_image(name:str, dir:str) -> str :
+    """Returns the path to an image named `name` in `dir`, if present.
+
+    :param name: Name of the image to look for.
+    :type name: str
+    :param dir: Directory where images are expected to be.
+    :type dir: str
+    :return: The path to the image, if it exists.
+    :rtype: str
+    """
+    _validate_dir_exists(dir)
+    expected_loc = os.path.join(dir, name + ".png")
+    if os.path.exists(expected_loc) and os.path.isfile(expected_loc) :
+        return expected_loc
+    else :
+        raise FileNotFoundError("Could not find an image named %s in %s." % (name, dir))
 
 # link pngs to jsons
 # awful performance, I'm sure I can do better, but it's a non-issue right now.
