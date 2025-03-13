@@ -32,6 +32,6 @@ params = {
     "output": "test_transparency"
 }
 
-gifify._from_names(**params)
+gifify._draw_from_names(**params)
 
 shutil.rmtree(tmpdir)

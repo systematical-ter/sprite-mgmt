@@ -20,4 +20,4 @@ params = {
     "output": "tests/test_mouth"
 }
 
-gifify._from_names(**params)
+gifify._draw_from_names(**params)

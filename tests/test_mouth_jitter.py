@@ -21,4 +21,4 @@ params = {
     "output": "tests/test_jitter"
 }
 
-gifify._from_names(**params)
+gifify._draw_from_names(**params)

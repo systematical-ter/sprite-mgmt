@@ -34,6 +34,6 @@ params = {
     "output": "tests/test_alternate"
 }
 
-gifify._from_names(**params)
+gifify._draw_from_names(**params)
 
 shutil.rmtree(tmpdir)

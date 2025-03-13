@@ -27,4 +27,5 @@ tests/taunt_test/
 
 # etc files I have laying around
 scr_tm.py
+scr_tmea.py
 secrets

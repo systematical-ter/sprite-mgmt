@@ -17,9 +17,14 @@ def _from_directories(img_dir, clsn_dir, duration, hb, mouth: bool = False, **kw
 
     _draw_it(spr, **kwargs)
 
-def _from_names(names, img_dir, clsn_dir, duration, hb, mouth: bool = False, **args) :
+def _SprColl_from_names(names, img_dir, clsn_dir, duration) -> SprCollection :
     collection: SprCollection = SprCollection.from_names_clsns(img_dir, clsn_dir, names)
     collection.override_duration(int(duration))
+
+    return SprCollection
+
+def _draw_from_names(names, img_dir, clsn_dir, duration, hb, mouth: bool = False, **args) :
+    collection: SprCollection = _SprColl_from_names(names, img_dir, clsn_dir, duration)
     spr: List[Image.Image] = collection.compile_sprites(hb, mouth)
     
     _draw_it(spr, **args)
