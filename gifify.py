@@ -21,7 +21,7 @@ def _SprColl_from_names(names, img_dir, clsn_dir, duration) -> SprCollection :
     collection: SprCollection = SprCollection.from_names_clsns(img_dir, clsn_dir, names)
     collection.override_duration(int(duration))
 
-    return SprCollection
+    return collection
 
 def _draw_from_names(names, img_dir, clsn_dir, duration, hb, mouth: bool = False, **args) :
     collection: SprCollection = _SprColl_from_names(names, img_dir, clsn_dir, duration)
